@@ -1,0 +1,6 @@
+{
+    "liveServer.settings.port": 5501,
+    "css.lint.unknownAtRules": "ignore",
+    "python.terminal.useEnvFile": true,
+    "python.envFile": "${workspaceFolder}/.env"
+}

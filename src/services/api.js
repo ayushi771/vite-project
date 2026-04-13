@@ -36,6 +36,7 @@ export async function saveRecipe(userId, recipe) {
       user_id: userId,
       recipe_id:recipe.id,
       recipe_title: recipe.title,
+      recipe_image: recipe.image 
     }),
   });
 

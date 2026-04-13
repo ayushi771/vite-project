@@ -50,7 +50,13 @@ export default function SavedRecipes({ user }) {
 
         {recipes.map((r) => (
           <div className="card" key={r.id}>
-            
+            <img style={{height: "150px", objectFit: "cover", width: "100%"}}
+               src={
+                r.recipe_image ||
+               `https://spoonacular.com/recipeImages/${r.recipe_id}-312x231.jpg`
+         }
+            alt={r.recipe_title}
+          />
             <h3>{r.recipe_title}</h3>
               <button onClick={() => handleView(r.recipe_id)}>
               View Recipe

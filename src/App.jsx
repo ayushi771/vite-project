@@ -7,35 +7,11 @@ import SavedRecipes from "/src/pages/SavedRecipes";
 import RecipeBuilder from "/src/components/recipe-builder/RecipeBuilder";
 import RequireAuth from "/src/components/RequireAuth";
 import Trash from "/src/pages/Trash";
-import burgerImg from "/src/assets/burger.png";
-import pizzaImg from "/src/assets/piza.png";
-import cakeImg from "/src/assets/cake.png";
-import downloadImg from "/src/assets/download.png";
-import noodlesImg from "/src/assets/noodles.png";
-import cupcakesImg from "/src/assets/cupcakes.png";
-import frenchfriesImg from "/src/assets/frenchfries.png";
-import breadImg from "/src/assets/bread.png";
-import bbImg from "/src/assets/bb.png";
-import nachosImg from "/src/assets/nachos.png";
-import garlicImg from "/src/assets/garlic.png";
-import tiramisuImg from "/src/assets/tiramisu.png";
-
+import Hero from "/src/components/Hero";
+import chefVideo from "/src/assets/chef-animation.mp4";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
-const FOOD_ICONS = [
-  burgerImg,
-  pizzaImg,
-  cakeImg,
-  downloadImg,
-  noodlesImg,
-  cupcakesImg,
-  frenchfriesImg,
-  breadImg,
-  bbImg,
-  nachosImg,
-  garlicImg,
-  tiramisuImg,
-];
+
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -405,7 +381,7 @@ export function Main({ user, setUser }) {
   return (
       <main>
       <Navbar user={user} onLoginClick={() => setShowAuth(true)} onLogout={handleLogout} />
-
+      <Hero chefVideo={chefVideo} />
       {/* RecipeBuilder handles gating: if not logged in it calls openLogin() */}
       <RecipeBuilder user={user} openLogin={() => setShowAuth(true)} />
 
