@@ -2,7 +2,9 @@
 // src/services/api.js
 // ================================
 
-const BASE_URL = "http://localhost:8000/api";
+// ✅ Use Render/Vercel env var in production, fallback to localhost for dev
+const API_ORIGIN = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const BASE_URL = `${API_ORIGIN}/api`;
 
 /**
  * ✅ Common response handler (FETCH-safe)
@@ -96,7 +98,7 @@ export async function verifyEmail(token) {
   return handleResponse(res);
 }
 
-// ✅ SAVE RECIPE (also uses handleResponse for consistent error handling)
+// ✅ SAVE RECIPE
 export async function saveRecipe(userId, recipe) {
   const res = await fetch(`${BASE_URL}/save_recipe`, {
     method: "POST",
