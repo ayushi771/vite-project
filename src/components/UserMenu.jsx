@@ -31,6 +31,13 @@ export default function UserMenu({ user, onLogout, openSaved, openTrash }) {
 
       {open && (
         <div className="dropdown">
+          {/* dropdown content top */}
+<div className="menu-user">
+  <div className="menu-user__name">{user?.name?.trim() || "User"}</div>
+  {user?.email && <div className="menu-user__email">{user.email}</div>}
+</div>
+
+<div className="menu-divider" />
           <button
             onClick={() => {
               Navigate("/saved-recipes");

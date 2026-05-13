@@ -7,11 +7,9 @@ import SavedRecipes from "/src/pages/SavedRecipes";
 import RecipeBuilder from "/src/components/recipe-builder/RecipeBuilder";
 import RequireAuth from "/src/components/RequireAuth";
 import Trash from "/src/pages/Trash";
-import Hero from "/src/components/Hero";
-import chefVideo from "/src/assets/chef-animation.mp4";
+
+import toast, { Toaster } from "react-hot-toast";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
-
-
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -27,9 +25,22 @@ export default function App() {
     }
   }, []);
 
+  function handleLogout() {
+    setUser(null);
+    localStorage.removeItem("user");
+  }
+
   return (
     <BrowserRouter>
       <div className="app-shell">
+ <Toaster position="top-center" />
+        {/* ✅ MOVE NAVBAR HERE */}
+        <Navbar
+          user={user}
+          onLoginClick={() => window.dispatchEvent(new Event("open-login"))}
+          onLogout={handleLogout}
+        />
+
         <div className="app-content">
           <Routes>
             <Route path="/" element={<Main user={user} setUser={setUser} />} />
@@ -58,6 +69,7 @@ export default function App() {
   );
 }
 
+
 export function Main({ user, setUser }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -82,7 +94,34 @@ export function Main({ user, setUser }) {
     setSuggestions([]);
     setSelectedIndex(-1);
   }, []);
+  useEffect(() => {
+  const params = new URLSearchParams(location.search);
+  const token = params.get("token");
 
+  if (!token) return;
+
+  // Call backend verify API
+  fetch(`${API_BASE}/api/verify?token=${token}`)
+    .then((res) => res.json())
+    .then((data) => {
+      toast.success(data.message || "Email verified! Now login 🎉");
+
+      // Open login modal automatically
+      setShowAuth(true);
+
+      // Clean URL (remove token from URL)
+      navigate("/", { replace: true });
+    })
+    .catch(() => {
+      toast.error("Invalid or expired verification link ❌");
+
+      // Still open login modal
+      setShowAuth(true);
+
+      navigate("/", { replace: true });
+    });
+
+}, [location.search]);
   // hydrate top-level user into App state if localStorage exists but user prop is null
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -95,7 +134,15 @@ export function Main({ user, setUser }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+   useEffect(() => {
+  const openLogin = () => setShowAuth(true);
 
+  window.addEventListener("open-login", openLogin);
+
+  return () => {
+    window.removeEventListener("open-login", openLogin);
+  };
+}, []);
    function handleLogin(userData) {
     setUser(userData);
     localStorage.setItem("user", JSON.stringify(userData));
@@ -380,9 +427,7 @@ export function Main({ user, setUser }) {
 
   return (
       <main>
-      <Navbar user={user} onLoginClick={() => setShowAuth(true)} onLogout={handleLogout} />
-      <Hero chefVideo={chefVideo} />
-      {/* RecipeBuilder handles gating: if not logged in it calls openLogin() */}
+     
       <RecipeBuilder user={user} openLogin={() => setShowAuth(true)} />
 
       <AuthModal show={showAuth} onClose={() => setShowAuth(false)} onLoginSuccess={handleLogin} />

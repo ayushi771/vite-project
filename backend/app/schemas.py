@@ -1,9 +1,11 @@
 
-
 from datetime import datetime
-from pydantic import BaseModel
 from typing import List, Optional
+from pydantic import BaseModel, EmailStr
 
+class VerifyCode(BaseModel):
+    email: EmailStr
+    code: str
 class IngredientCreate(BaseModel):
     name: str
 
@@ -11,8 +13,9 @@ class IngredientOut(BaseModel):
     id: int
     name: str
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 class RecipeCreate(BaseModel):
     spoonacular_id: Optional[int] = None
@@ -66,4 +69,19 @@ class RecipeSave(BaseModel):
     recipe_title: str
     recipe_image: str | None = None   
 
+class SavedRecipeOut(BaseModel):
+    id: int
+    recipe_id: int
+    user_id: int
+    recipe_title: str
+    recipe_image: Optional[str] = None
+    created_at: Optional[datetime] = None
+    is_deleted: bool = False
 
+    model_config = {
+        "from_attributes": True
+    }
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str    

@@ -1,14 +1,13 @@
 from datetime import datetime
-from os import name
 import secrets
 import hashlib
-from sqlalchemy import select 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from . import models, schemas
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import timedelta, timezone
 from .auth import hash_password
+
 
 async def create_ingredient(db: AsyncSession, ingredient: schemas.IngredientCreate):
     obj = models.Ingredient(name=ingredient.name)
@@ -16,7 +15,6 @@ async def create_ingredient(db: AsyncSession, ingredient: schemas.IngredientCrea
     try:
         await db.commit()
     except IntegrityError:
-        # Ingredient already exists -> rollback and return existing row
         await db.rollback()
         q = select(models.Ingredient).where(models.Ingredient.name == ingredient.name)
         result = await db.execute(q)
@@ -30,27 +28,26 @@ async def list_ingredients(db: AsyncSession, limit: int = 100):
     return result.scalars().all()
 
 def _normalize_ingredient_item(item):
-    # If it's a dict with 'name'
     if isinstance(item, dict):
         return item.get("name") or str(item)
-    # If it's an object with attribute 'name' (e.g., Pydantic model)
     name = getattr(item, "name", None)
     if name is not None:
         return name
-    # Otherwise coerce to string
     return str(item)
 
-# Recipes
+# ---------------- RECIPES ----------------
+
 async def create_recipe(db: AsyncSession, recipe_in: schemas.RecipeCreate):
-    # Normalize ingredients to a list of plain strings
     raw_ings = recipe_in.ingredients or []
     normalized_ings = [_normalize_ingredient_item(i) for i in raw_ings]
+
     if recipe_in.spoonacular_id:
         q = select(models.Recipe).where(models.Recipe.spoonacular_id == recipe_in.spoonacular_id)
         result = await db.execute(q)
         existing = result.scalars().first()
         if existing:
             return existing
+
     obj = models.Recipe(
         spoonacular_id=recipe_in.spoonacular_id,
         title=recipe_in.title,
@@ -58,13 +55,9 @@ async def create_recipe(db: AsyncSession, recipe_in: schemas.RecipeCreate):
         instructions=recipe_in.instructions,
         ingredients=normalized_ings,
         cuisine=recipe_in.cuisine,
-
         diet=recipe_in.diet,
-
         meal_type=recipe_in.meal_type,
-
         calories=recipe_in.calories,
-
         dish_types=recipe_in.dish_types
     )
     db.add(obj)
@@ -82,16 +75,26 @@ async def list_recipes(db: AsyncSession, limit: int = 50, offset: int = 0):
     result = await db.execute(q)
     return result.scalars().all()
 
-async def create_user(db: AsyncSession, email: str, password: str , name: str):
-    # Hash the plain password exactly once here
-    hashed = hash_password(password)
+# ---------------- USERS / AUTH ----------------
 
+async def create_user(
+    db: AsyncSession,
+    email: str,
+    password: str,
+    name: str,
+    verification_token: str = None,
+    verification_code: str = None,
+    verification_code_expiry=None,
+):
     user = models.User(
-        name= name,
         email=email,
-        password=hashed
+        password=hash_password(password),
+        name=name,
+        verification_token=verification_token,
+        verification_code=verification_code,
+        verification_code_expiry=verification_code_expiry,
+        is_verified=False,
     )
-
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -101,6 +104,26 @@ async def get_user_by_email(db: AsyncSession, email: str):
     q = select(models.User).where(models.User.email == email)
     result = await db.execute(q)
     return result.scalars().first()
+
+async def get_user_by_token(db: AsyncSession, token: str):
+    q = select(models.User).where(models.User.verification_token == token)
+    result = await db.execute(q)
+    return result.scalars().first()
+
+async def get_user_by_reset_token(db: AsyncSession, token: str):
+    q = select(models.User).where(models.User.reset_token == token)
+    result = await db.execute(q)
+    return result.scalars().first()
+
+async def get_user_by_email_and_code(db: AsyncSession, email: str, code: str):
+    q = select(models.User).where(
+        models.User.email == email,
+        models.User.verification_code == code
+    )
+    result = await db.execute(q)
+    return result.scalars().first()
+
+# ---------------- SAVED RECIPES ----------------
 
 async def save_recipe(db: AsyncSession, user_id: int, recipe_id: int, recipe_title: str, recipe_image: str = None):
     if recipe_id is None:
@@ -116,12 +139,13 @@ async def save_recipe(db: AsyncSession, user_id: int, recipe_id: int, recipe_tit
     db.add(obj)
     await db.commit()
     await db.refresh(obj)
-
     return obj
 
 async def get_saved_recipes(db: AsyncSession, user_id: int):
     result = await db.execute(
-        select(models.SavedRecipe).where(models.SavedRecipe.user_id == user_id).where(models.SavedRecipe.is_deleted == False)
+        select(models.SavedRecipe)
+        .where(models.SavedRecipe.user_id == user_id)
+        .where(models.SavedRecipe.is_deleted == False)
     )
     return result.scalars().all()
 
@@ -133,13 +157,8 @@ async def get_deleted_recipes(db: AsyncSession, user_id: int):
     )
     return result.scalars().all()
 
-
-
 async def delete_saved_recipe(db: AsyncSession, recipe_id: int):
-    result = await db.execute(
-        select(models.SavedRecipe).where(models.SavedRecipe.id == recipe_id)
-    )
-
+    result = await db.execute(select(models.SavedRecipe).where(models.SavedRecipe.id == recipe_id))
     recipe = result.scalar_one_or_none()
 
     if not recipe:
@@ -149,30 +168,22 @@ async def delete_saved_recipe(db: AsyncSession, recipe_id: int):
     recipe.deleted_at = datetime.utcnow()
 
     await db.commit()
-
     return {"message": "Recipe moved to trash"}
 
 async def restore_recipe(db: AsyncSession, recipe_id: int):
-    result = await db.execute(
-        select(models.SavedRecipe).where(models.SavedRecipe.id == recipe_id)
-    )
-
+    result = await db.execute(select(models.SavedRecipe).where(models.SavedRecipe.id == recipe_id))
     recipe = result.scalars().first()
 
     if recipe:
         recipe.is_deleted = False
         recipe.deleted_at = None
-
         await db.commit()
         await db.refresh(recipe)
 
     return recipe
 
 async def permanently_delete_recipe(db: AsyncSession, recipe_id: int):
-    result = await db.execute(
-        select(models.SavedRecipe).where(models.SavedRecipe.id == recipe_id)
-    )
-
+    result = await db.execute(select(models.SavedRecipe).where(models.SavedRecipe.id == recipe_id))
     recipe = result.scalars().first()
 
     if recipe:
@@ -180,3 +191,9 @@ async def permanently_delete_recipe(db: AsyncSession, recipe_id: int):
         await db.commit()
 
     return {"message": "Recipe permanently deleted"}
+
+async def get_user_by_reset_token(db: AsyncSession, token: str):
+    result = await db.execute(
+        select(models.User).where(models.User.reset_token == token)
+    )
+    return result.scalar_one_or_none()

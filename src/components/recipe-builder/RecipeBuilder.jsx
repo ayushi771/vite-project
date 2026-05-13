@@ -1,11 +1,11 @@
-import React , {useCallback , useEffect , useMemo , useRef , useState} from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { searchRecipes, autocompleteIngredient } from "/src/services/spoonacularApi";
 import RBControls from "./RBControls";
 import RBResults from "./RBResults";
 import RecipeModal from "./RecipeModal";
 
 export default function RecipeBuilder({ user, openLogin }) {
-  const isAuthed = !!user;  
+  const isAuthed = !!user;
   const [ingredientInput, setIngredientInput] = useState("");
   const [ingredients, setIngredients] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
@@ -25,6 +25,7 @@ export default function RecipeBuilder({ user, openLogin }) {
 
   const suggestionDebounce = useRef(null);
   const API_PREFIX = "/api";
+
   const requireAuth = useCallback(
     (actionLabel) => {
       if (isAuthed) return true;
@@ -35,6 +36,7 @@ export default function RecipeBuilder({ user, openLogin }) {
     },
     [isAuthed, openLogin]
   );
+
   useEffect(() => {
     if (isAuthed) setAuthNotice("");
   }, [isAuthed]);
@@ -58,9 +60,11 @@ export default function RecipeBuilder({ user, openLogin }) {
         console.error("Autocomplete failed", err);
       }
     }, 220);
+
     return () => clearTimeout(suggestionDebounce.current);
   }, [ingredientInput]);
-   const addIngredient = useCallback(
+
+  const addIngredient = useCallback(
     (value) => {
       const v = (value || ingredientInput || "").trim().toLowerCase();
       if (!v) return;
@@ -94,43 +98,46 @@ export default function RecipeBuilder({ user, openLogin }) {
   // -----------------------
   // Search / Surprise
   // -----------------------
-  const doSearch = useCallback(async () => {
-    if (!requireAuth("search recipes")) return;
+  const doSearch = useCallback(
+    async () => {
+      if (!requireAuth("search recipes")) return;
 
-    setAuthNotice("");
-    setError("");
-    setLoading(true);
-    setResults([]);
-    setSelectedRecipe(null);
+      setAuthNotice("");
+      setError("");
+      setLoading(true);
+      setResults([]);
+      setSelectedRecipe(null);
 
-    try {
-      if (ingredients.length === 0) {
-        setError("Add at least 1 ingredient to search.");
-        return;
+      try {
+        if (ingredients.length === 0) {
+          setError("Add at least 1 ingredient to search.");
+          return;
+        }
+
+        const data = await searchRecipes({
+          ingredients,
+          cuisine,
+          diet,
+          meal_type: mealType,
+          max_calories: maxCalories,
+          number,
+        });
+
+        const resList = data.results || [];
+        setResults(resList);
+
+        if (resList.length === 0) {
+          setError("No recipes found. Try different filters or fewer ingredients.");
+        }
+      } catch (err) {
+        console.error(err);
+        setError(err.message || "Search failed");
+      } finally {
+        setLoading(false);
       }
-
-      const data = await searchRecipes({
-        ingredients,
-        cuisine,
-        diet,
-        meal_type: mealType,
-        max_calories: maxCalories,
-        number,
-      });
-
-      const resList = data.results || [];
-      setResults(resList);
-
-      if (resList.length === 0) {
-        setError("No recipes found. Try different filters or fewer ingredients.");
-      }
-    } catch (err) {
-      console.error(err);
-      setError(err.message || "Search failed");
-    } finally {
-      setLoading(false);
-    }
-  }, [requireAuth, ingredients, cuisine, diet, mealType, maxCalories, number]);
+    },
+    [requireAuth, ingredients, cuisine, diet, mealType, maxCalories, number]
+  );
 
   const openRecipeDetails = useCallback(
     async (r) => {
@@ -158,9 +165,7 @@ export default function RecipeBuilder({ user, openLogin }) {
         }
 
         const nutrients = details.nutrition?.nutrients || [];
-        const caloriesObj = nutrients.find(
-          (n) => (n.name || n.title || "").toLowerCase() === "calories"
-        );
+        const caloriesObj = nutrients.find((n) => (n.name || n.title || "").toLowerCase() === "calories");
         const calories = caloriesObj ? caloriesObj.amount : null;
 
         setSelectedRecipe({
@@ -174,6 +179,7 @@ export default function RecipeBuilder({ user, openLogin }) {
           diet: details.diets?.[0] || "",
           meal_type: details.dishTypes?.[0] || "",
           calories,
+          servings: details.servings || null,
           nutrition: details.nutrition || null,
           sourceUrl: details.sourceUrl || details.spoonacularSourceUrl || null,
         });
@@ -194,28 +200,62 @@ export default function RecipeBuilder({ user, openLogin }) {
     openRecipeDetails(results[idx]);
   }, [requireAuth, results, openRecipeDetails]);
 
-  const handleSaveSelected = useCallback(async () => {
-    if (!selectedRecipe) return;
-    if (!requireAuth("save recipes")) return;
+  // -----------------------
+  // Save selected recipe (full handler)
+  // -----------------------
+const handleSaveSelected = useCallback(async () => {
+  if (!selectedRecipe) return;
+  if (!requireAuth("save recipes")) return;
 
-    try {
-      const res = await fetch("/api/save_recipe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: user.id,
-          recipe_id: selectedRecipe.spoonacular_id,
-          recipe_title: selectedRecipe.title,
-        }),
-      });
+  // Defensive checks
+  const uid = user?.id;
+  const rid = selectedRecipe?.spoonacular_id ?? selectedRecipe?.id;
+  if (!uid) {
+    console.error("No user id present", user);
+    alert("User id missing. Please login again.");
+    return;
+  }
+  if (!rid) {
+    console.error("No recipe id present", selectedRecipe);
+    alert("Recipe id missing.");
+    return;
+  }
 
-      if (!res.ok) throw new Error("Failed to save recipe");
-      alert("Recipe saved successfully!");
-    } catch (err) {
-      console.error(err);
-      alert("Error saving recipe");
+  try {
+    // <-- IMPORTANT: send exactly the fields backend requires
+    const payload = {
+      user_id: Number(uid),
+      recipe_id: Number(rid),
+      recipe_title: selectedRecipe.title || "",
+      recipe_image: selectedRecipe.image || ""
+    };
+
+    console.log("Saving recipe payload:", payload);
+
+    const res = await fetch(`${API_PREFIX}/save_recipe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    // parse body safely
+    const json = await res.json().catch(() => null);
+    console.log("save_recipe status", res.status, "body:", json);
+
+    if (!res.ok) {
+      const errDetail = json?.detail ?? json ?? `Request failed (${res.status})`;
+      throw new Error(typeof errDetail === "string" ? errDetail : JSON.stringify(errDetail));
     }
-  }, [selectedRecipe, requireAuth, user]);
+
+    // Success — broadcast so SavedRecipes can refresh if needed
+    window.dispatchEvent(new CustomEvent("recipeSaved", { detail: json }));
+
+    
+  } catch (err) {
+    console.error("save recipe error:", err);
+   
+  }
+}, [selectedRecipe, requireAuth, user]);
 
   const primarySearchLabel = useMemo(() => {
     if (loading) return "Searching...";
@@ -224,11 +264,6 @@ export default function RecipeBuilder({ user, openLogin }) {
 
   return (
     <main className="recipe-builder">
-     
-
-      {authNotice && <div className="rb-auth-notice">{authNotice}</div>}
-      {error && <div className="rb-error">{error}</div>}
-
       <RBControls
         ingredientInput={ingredientInput}
         setIngredientInput={setIngredientInput}
@@ -254,6 +289,24 @@ export default function RecipeBuilder({ user, openLogin }) {
         primarySearchLabel={primarySearchLabel}
         hasResults={results.length > 0}
       />
+
+      {(authNotice || error) && (
+        <section className="rb-feedback-area">
+          {authNotice && (
+            <div className="rb-auth-notice">
+              <span className="rb-feedback-icon">🔒</span>
+              <span>{authNotice}</span>
+            </div>
+          )}
+
+          {error && (
+            <div className="rb-error">
+              <span className="rb-feedback-icon">⚠️</span>
+              <span>{error}</span>
+            </div>
+          )}
+        </section>
+      )}
 
       <RBResults results={results} loading={loading} onOpen={openRecipeDetails} />
 

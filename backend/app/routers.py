@@ -1,20 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, Query , BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import os
 import httpx
-from . import crud, schemas
-from .database import get_db
-from .auth import verify_password
 import re
 import logging
+from datetime import datetime, timezone
+from .auth import verify_password, hash_password, generate_token, get_expiry, generate_otp_code, otp_expiry
+from . import crud, schemas
+from .database import get_db
+from .email_utils import send_email
 
 logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/api")
+
 SPOONACULAR_API_KEY = os.getenv("SPOONACULAR_API_KEY")
 SPOONACULAR_BASE = "https://api.spoonacular.com/recipes/complexSearch"
 
+# ---------------- INGREDIENTS ----------------
 
 @router.post("/ingredients", response_model=schemas.IngredientOut)
 async def add_ingredient(ingredient: schemas.IngredientCreate, db: AsyncSession = Depends(get_db)):
@@ -25,167 +29,187 @@ async def add_ingredient(ingredient: schemas.IngredientCreate, db: AsyncSession 
 async def get_ingredients(limit: int = Query(100, ge=1, le=1000), db: AsyncSession = Depends(get_db)):
     return await crud.list_ingredients(db, limit=limit)
 
- 
-@router.post("/recipes", response_model=schemas.RecipeOut)
-async def save_recipe(recipe: schemas.RecipeCreate, db: AsyncSession = Depends(get_db)):
-    obj = await crud.create_recipe(db, recipe)
-    return {
-        "id": obj.id,
-        "spoonacular_id": obj.spoonacular_id,
-        "title": obj.title,
-        "image": obj.image,
-        "instructions": obj.instructions,
-        "ingredients": obj.ingredients or [],
-    }
+# ---------------- RECIPES ----------------
+# Replace existing /save_recipe handler with this:
 
+@router.post("/save_recipe", response_model=schemas.SavedRecipeOut)
+async def save_recipe(payload: schemas.RecipeSave, db: AsyncSession = Depends(get_db)):
+    """
+    Accepts: { user_id, recipe_id, recipe_title, recipe_image }
+    Creates a SavedRecipe using the existing crud/save function.
+    """
+    obj = await crud.save_recipe(db, payload.user_id, payload.recipe_id, payload.recipe_title, payload.recipe_image)
+    return obj
 @router.get("/recipes", response_model=List[schemas.RecipeOut])
-async def list_recipes(limit: int = Query(50, ge=1, le=200), offset: int = 0, db: AsyncSession = Depends(get_db)):
-    objs = await crud.list_recipes(db, limit=limit, offset=offset)
-    return [
-        {
-            "id": o.id,
-            "spoonacular_id": o.spoonacular_id,
-            "title": o.title,
-            "image": o.image,
-            "instructions": o.instructions,
-            "ingredients": o.ingredients or [],
-        }
-        for o in objs
-    ]
-
-
-
-@router.get("/spoonacular/recipes/{recipe_id}")
-async def spoonacular_get_recipe_details(recipe_id: int):
-
-    if not SPOONACULAR_API_KEY:
-        raise HTTPException(status_code=503, detail="Spoonacular API key not configured")
-
-    url = f"https://api.spoonacular.com/recipes/{recipe_id}/information"
-
-    params = {
-        "apiKey": SPOONACULAR_API_KEY,
-        "includeNutrition": True
-    }
-
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        resp = await client.get(url, params=params)
-
-    if resp.status_code != 200:
-        logger.warning(f"Spoonacular error {resp.status_code}: {resp.text[:500]}")
-        raise HTTPException(status_code=resp.status_code, detail="Failed to fetch recipe")
-
-    data = resp.json()
-
-    # nutrition
-    nutrition = data.get("nutrition")
-
-    # dish types
-    dish_types = data.get("dishTypes", [])
-
-    # calories
-    calories = None
-    if isinstance(nutrition, dict):
-        nutrients = nutrition.get("nutrients", [])
-        for n in nutrients:
-            title = (n.get("title") or n.get("name") or "").lower()
-            if "calorie" in title:
-                try:
-                    calories = int(round(n.get("amount", 0)))
-                except Exception:
-                    calories = n.get("amount")
-                break
-
-        ingredients = [
-        ing.get("original") or ing.get("name")
-        for ing in data.get("extendedIngredients", [])
-    ]
-
-    instructions = ""
-    if data.get("instructions"):
-        instructions = re.sub("<.*?>", "", data["instructions"]).strip()
-
-    elif data.get("analyzedInstructions"):
-        steps = []
-        for block in data["analyzedInstructions"]:
-            for step in block.get("steps", []):
-                steps.append(step.get("step"))
-        instructions = "\n".join(steps)
-    result = {
-        "id": data.get("id"),
-        "spoonacular_id": data.get("id"),
-        "title": data.get("title"),
-        "image": data.get("image"),
-        "sourceUrl": data.get("sourceUrl") or data.get("spoonacularSourceUrl"),
-        "instructions": instructions,
-        "ingredients": ingredients,
-        "extendedIngredients": data.get("extendedIngredients"),
-        "cuisines": data.get("cuisines", []),
-        "diets": data.get("diets", []),
-        "dishTypes": dish_types,
-        "readyInMinutes": data.get("readyInMinutes"),
-        "nutrition": nutrition,
-        "calories": calories,
-    }
-
-    return result
-
-@router.get("/spoonacular/autocomplete")
-async def spoonacular_autocomplete(query: str = Query(..., min_length=1, max_length=60)):
-    key = os.getenv("SPOONACULAR_API_KEY")
-    if not key:
-        raise HTTPException(status_code=503, detail="Spoonacular API key not configured")
-    url = "https://api.spoonacular.com/food/ingredients/autocomplete"
-    params = {"query": query, "number": 8, "apiKey": key}
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        r = await client.get(url, params=params)
-        r.raise_for_status()
-        return r.json()
-
-@router.get("/spoonacular/findByIngredients")
-async def spoonacular_find_by_ingredients(ingredients: str = Query(..., min_length=1), number: int = 10):
-    key = os.getenv("SPOONACULAR_API_KEY")
-    if not key:
-        raise HTTPException(status_code=503, detail="Spoonacular API key not configured")
-    url = "https://api.spoonacular.com/recipes/findByIngredients"
-    params = {"ingredients": ingredients, "number": number, "apiKey": key}
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        r = await client.get(url, params=params)
-        r.raise_for_status()
-        return r.json()
-
+async def list_recipes(limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db)):
+    return await crud.list_recipes(db, limit=limit, offset=offset)
 
 @router.post("/register")
-async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
-    new_user = await crud.create_user(db, user.email, user.password, user.name)
-    return {"id": new_user.id, "email": new_user.email, "name": new_user.name}
+async def register(
+    user: schemas.UserCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    existing = await crud.get_user_by_email(db, user.email)
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already exists")
+
+    code = generate_otp_code(6)
+    expires_at = otp_expiry(10)
+
+    new_user = await crud.create_user(
+        db,
+        email=user.email,
+        password=user.password,
+        name=user.name,
+        verification_token=None,              # not needed for OTP
+        verification_code=code,
+        verification_code_expiry=expires_at
+    )
+
+    body = (
+        f"Hi {new_user.name},\n\n"
+        f"Your verification code is: {code}\n"
+        f"This code expires in 10 minutes.\n\n"
+        f"If you did not request this, ignore this email."
+    )
+
+    background_tasks.add_task(
+        send_email,
+        user.email,
+        "Verify your account",
+        body
+    )
+
+    return {"message": "User registered. Check your email for the verification code."}
+
+@router.post("/verify-code")
+async def verify_code(payload: schemas.VerifyCode, db: AsyncSession = Depends(get_db)):
+    user = await crud.get_user_by_email_and_code(db, payload.email, payload.code)
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid email or code")
+
+    if user.is_verified:
+        return {"message": "Already verified"}
+
+    now = datetime.now(timezone.utc)
+
+    expiry = user.verification_code_expiry
+
+    # ✅ FIX (same as reset-password)
+    if expiry and expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+
+    if not expiry or expiry < now:
+        raise HTTPException(status_code=400, detail="Code expired")
+
+    user.is_verified = True
+    user.verification_code = None
+    user.verification_code_expiry = None
+
+    await db.commit()
+    return {"message": "Email verified successfully"}
+
+@router.get("/verify")
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+    user = await crud.get_user_by_token(db, token)
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    user.is_verified = True
+    user.verification_token = None
+
+    await db.commit()
+
+    return {"message": "Email verified successfully"}
+
 
 @router.post("/login")
 async def login(user: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
     db_user = await crud.get_user_by_email(db, user.email)
+
     if not db_user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not verify_password(user.password, db_user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-     
-    return {"message": "Login successful", "user_id": db_user.id , "name": db_user.name , "email": db_user.email}
 
-@router.post("/save_recipe")
-async def save_recipe(
-    recipe: schemas.RecipeSave,
+    if not db_user.is_verified:
+        raise HTTPException(status_code=403, detail="Please verify your email")
+
+    return {
+        "message": "Login successful",
+        "user_id": db_user.id,
+        "name": db_user.name,
+        "email": db_user.email
+    }
+
+@router.post("/forgot-password")
+async def forgot_password(
+    email: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
-    if not recipe.recipe_id or not recipe.recipe_title:
-        raise HTTPException(status_code=400, detail="recipe_id and recipe_title are required")
+    user = await crud.get_user_by_email(db, email)
 
-    return await crud.save_recipe(
-        db,
-        recipe.user_id,
-        recipe.recipe_id,
-        recipe.recipe_title,
-        recipe.recipe_image  # ✅ ADD THIS
+    if not user:
+        return {"message": "If email exists, reset code sent"}
+
+    # 🔥 CHANGE ONLY: generate 6-digit OTP
+    token = generate_otp_code(6)
+
+    user.reset_token = token
+    user.reset_token_expiry = otp_expiry(10)
+
+    await db.commit()
+
+    body = (
+        f"Hi {user.name},\n\n"
+        f"Your password reset token is:\n\n"
+        f"{token}\n\n"
+        f"This expires in 10 minutes.\n\n"
+        f"If you did not request this, ignore this email."
     )
+
+    background_tasks.add_task(
+        send_email,
+        email,
+        "Password Reset Token",
+        body
+    )
+
+    return {"message": "Reset token sent"}
+@router.post("/reset-password")
+async def reset_password(
+    payload: schemas.ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    user = await crud.get_user_by_reset_token(db, payload.token)
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    now = datetime.now(timezone.utc)
+
+    expiry = user.reset_token_expiry
+
+    # 🔥 FIX timezone mismatch (ONLY FIX)
+    if expiry and expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+
+    if not expiry or expiry < now:
+        raise HTTPException(status_code=400, detail="Reset token expired")
+
+    user.password = hash_password(payload.new_password)
+
+    user.reset_token = None
+    user.reset_token_expiry = None
+
+    await db.commit()
+
+    return {"message": "Password reset successful"}
 
 @router.get("/saved-recipes")
 async def saved_recipes(user_id: int, db: AsyncSession = Depends(get_db)):
@@ -209,47 +233,72 @@ async def delete_permanently(recipe_id: int, db: AsyncSession = Depends(get_db))
 
 @router.get("/spoonacular/search")
 async def search_recipes(
-    ingredients: str = Query("", description="Comma-separated ingredients"),
-    cuisine: str = Query("", description="Cuisine type"),
-    diet: str = Query("", description="Diet type"),
-    meal_type: str = Query("", description="Meal type"),
-    max_calories: int = Query(None, description="Maximum calories"),
-    number: int = Query(12, description="Number of results")
+    ingredients: str = "",
+    cuisine: str = "",
+    diet: str = "",
+    meal_type: str = "",
+    max_calories: int = None,
+    number: int = 12
 ):
     if not SPOONACULAR_API_KEY:
-        raise HTTPException(status_code=503, detail="Spoonacular API key not configured")
+        raise HTTPException(status_code=503, detail="API key missing")
 
     params = {
         "apiKey": SPOONACULAR_API_KEY,
         "number": number,
-        "addRecipeInformation": True,
-        "includeNutrition": True
     }
 
     if ingredients:
         params["includeIngredients"] = ingredients
-
     if cuisine:
         params["cuisine"] = cuisine
-
     if diet:
         params["diet"] = diet
-
     if meal_type:
         params["type"] = meal_type
-
     if max_calories:
         params["maxCalories"] = max_calories
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        try:
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
             res = await client.get(SPOONACULAR_BASE, params=params)
             res.raise_for_status()
             return res.json()
 
-        except httpx.HTTPStatusError as exc:
-            body = exc.response.text[:1000]
-            raise HTTPException(status_code=502, detail=f"Spoonacular error: {body}")
+    except httpx.HTTPError as e:
+        logger.exception("Spoonacular API failed")
+        raise HTTPException(status_code=503, detail=str(e))
+@router.get("/spoonacular/autocomplete")
+async def autocomplete(query: str):
+    if not SPOONACULAR_API_KEY:
+        raise HTTPException(status_code=503, detail="API key missing")
 
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Spoonacular request failed: {str(exc)}")
+    url = "https://api.spoonacular.com/food/ingredients/autocomplete"
+
+    params = {
+        "apiKey": SPOONACULAR_API_KEY,
+        "query": query,
+        "number": 5
+    }
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        res = await client.get(url, params=params)
+        res.raise_for_status()
+        return res.json()
+
+@router.get("/spoonacular/recipes/{recipe_id}")
+async def get_recipe(recipe_id: int):
+    if not SPOONACULAR_API_KEY:
+        raise HTTPException(status_code=503, detail="API key missing")
+
+    url = f"https://api.spoonacular.com/recipes/{recipe_id}/information"
+
+    params = {
+        "apiKey": SPOONACULAR_API_KEY,
+        "includeNutrition": True
+    }
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        res = await client.get(url, params=params)
+        res.raise_for_status()
+        return res.json()        

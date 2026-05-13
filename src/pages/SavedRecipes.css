@@ -1,0 +1,551 @@
+:root {
+  --background: oklch(0.972 0.014 79.3);
+  --foreground: oklch(0.319 0.066 312.5);
+
+  --paper: oklch(0.972 0.014 79.3);
+  --linen: oklch(0.985 0.01 84.8);
+
+  --muted-foreground: oklch(0.584 0.043 304.6);
+  --secondary-foreground: oklch(0.34 0.06 312.5);
+
+  --border: oklch(0.885 0.019 82.1);
+
+  --ink: oklch(0.319 0.066 312.5);
+  --ink-2: oklch(0.426 0.055 307.2);
+
+  --r-lg: 22px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --coral: oklch(0.701 0.134 31.4);
+  --coral-deep: oklch(0.612 0.128 28.8);
+
+  --rose: oklch(0.786 0.11 10.5);
+
+  --shadow-paper: 0 2px 0 color-mix(in oklab, var(--ink) 8%, transparent),
+    0 22px 40px -24px color-mix(in oklab, var(--ink) 24%, transparent);
+
+  --shadow-lift: 0 8px 0 color-mix(in oklab, var(--ink) 16%, transparent),
+    0 32px 70px -36px color-mix(in oklab, var(--ink) 40%, transparent);
+
+  --gradient-coral: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--coral) 45%, white) 0%,
+    var(--coral) 55%,
+    var(--coral-deep) 100%
+  );
+}
+
+/* ========= LAYOUT ========= */
+.atelier-shell {
+  width: min(1490px, 100%);
+  margin: 0 auto;
+  padding: 18px 16px 60px;
+}
+
+/* ========= HERO ========= */
+.atelier-hero {
+  background: color-mix(in oklab, var(--linen) 92%, white);
+  border: 2px solid var(--foreground);
+  border-radius: 26px;
+  box-shadow: var(--shadow-lift);
+  padding: clamp(20px, 4vw, 40px);
+}
+
+.atelier-eyebrow {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  font-weight: 800;
+}
+
+.atelier-hero h1 {
+  margin: 0;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 1;
+  color: var(--foreground);
+}
+
+.atelier-lead {
+  margin: 10px 0 0;
+  color: var(--secondary-foreground);
+  line-height: 1.7;
+}
+
+/* ========= SECTION HEAD ========= */
+.atelier-section-head {
+  padding: 30px 0 70px 0;
+}
+
+.atelier-section-head h2 {
+  margin: 0;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  color: var(--foreground);
+}
+
+.atelier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 300px);
+  gap: 20px;
+  justify-content: start;
+}
+.atelier-card-body h3 {
+  margin: 0 0 12px;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1.15;
+  text-align: center;
+  color: var(--foreground);
+
+  /* keeps long titles neat */
+  display: -webkit-box;
+  
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.atelier-card {
+  position: relative;
+  background: var(--linen);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-lg);
+  padding: 76px 22px 24px;
+  box-shadow: 5px 5px 0 var(--ink-2);
+  cursor: pointer;
+  overflow: visible;
+  margin-bottom:30px;
+  transition: transform 0.5s var(--ease-bounce), box-shadow 0.4s var(--ease-out);
+  animation: pop-in 0.6s var(--ease-out) both;
+}
+
+/* slight postcard tilt like the original */
+.atelier-card:nth-child(3n)   { transform: rotate(-1deg); }
+.atelier-card:nth-child(3n+1) { transform: rotate(0.8deg); }
+.atelier-card:nth-child(3n+2) { transform: rotate(-0.4deg); }
+
+/* hover */
+.atelier-card:hover {
+  transform: translate(-3px, -6px) rotate(-1.5deg);
+  box-shadow: 10px 12px 0 var(--ink-2), 0 30px 50px -20px rgba(232,127,107,0.4);
+}
+
+/* THIS is the “border effect” you’re missing:
+   perforated strip at the top (stamp-like) */
+.atelier-card::before {
+  content: "";
+  position: absolute;
+  top: -1.5px;
+  left: -1.5px;
+  right: -1.5px;
+  height: 8px;
+
+  background-image: radial-gradient(
+    circle 4px at 8px 0,
+    var(--paper) 99%,
+    transparent 100%
+  );
+  background-size: 16px 8px;
+  background-repeat: repeat-x;
+
+  pointer-events: none;
+}
+.atelier-card-image-wrap {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 4px solid color-mix(in oklab, var(--linen) 92%, white);
+  background: white;
+  box-shadow: 0 14px 25px rgba(0, 0, 0, 0.18);
+}
+
+.atelier-card-image-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.atelier-card-body {
+  text-align: center;
+}
+
+.atelier-card-body h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: var(--foreground);
+}
+
+.atelier-card-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* ========= BUTTONS ========= */
+.atelier-button {
+  flex: 1;
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: white;
+  color: var(--foreground);
+}
+
+.atelier-button-primary {
+  border-style: solid;
+  background: var(--gradient-coral);
+  color: white;
+}
+
+.atelier-button-secondary {
+  background: color-mix(in oklab, white 80%, var(--rose));
+}
+
+/* ========= EMPTY ========= */
+.atelier-empty {
+  border: 2px dotted var(--foreground);
+  border-radius: 26px;
+  background: color-mix(in oklab, var(--linen) 92%, white);
+  box-shadow: var(--shadow-lift);
+  padding: 50px 18px;
+  margin-top: 14px;
+  text-align: center;
+}
+
+.atelier-empty-icon {
+  font-size: 3rem;
+}
+
+.atelier-empty h2 {
+  margin: 10px 0 8px;
+  font-family: "Instrument Serif", Georgia, serif;
+}
+
+.atelier-empty p {
+  margin: 0;
+  color: var(--secondary-foreground);
+}
+
+/* ========= MODAL (above navbar) ========= */
+.atelier-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.atelier-modal-card {
+  position: relative;
+  width: min(1280px, 100%);
+  max-height: min(92vh, 1000px);
+  overflow: auto;
+
+  border-radius: 26px;
+  border: 1.5px solid var(--ink); /* make modal border consistent */
+  background: color-mix(in oklab, var(--linen) 92%, white);
+  box-shadow: var(--shadow-lift);
+}
+
+/* Close button always visible */
+.atelier-modal-close {
+  position: sticky;
+  top: 5px;
+  margin-left: auto;
+  margin-right: 10px;
+  margin-top: 5px;
+  z-index: 50;
+
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+
+  border: 2px solid var(--foreground);
+  background: white;
+  color: var(--foreground);
+
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+}
+
+/* ========= RECIPE DETAIL ========= */
+.recipe-detail {
+  padding: 0px 16px 18px;
+}
+
+.recipe-detail-header {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr); /* bigger image area */
+  gap: 18px;
+  align-items: center;
+
+  padding: 10px 0 16px;
+  border-bottom: 1px solid color-mix(in oklab, var(--ink) 30%, transparent);
+}
+
+.recipe-detail-media {
+  width: 100%;
+  height: 240px; /* bigger */
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1.5px solid var(--ink);
+  background: white;
+  box-shadow: 7px 7px 0 color-mix(in oklab, var(--ink-2) 85%, transparent);
+}
+
+.recipe-detail-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.recipe-detail-kicker {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  font-weight: 900;
+}
+
+.recipe-detail-title h2 {
+  margin: 0;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+  line-height: 1.05;
+  color: var(--foreground);
+}
+
+.recipe-detail-subtitle {
+  margin: 8px 0 0;
+  color: var(--secondary-foreground);
+  line-height: 1.6;
+}
+
+.recipe-detail-body {
+  padding: 16px 0 0;
+  display: grid;
+  gap: 14px;
+}
+
+/* Stats row */
+.recipe-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1.5px solid var(--ink);
+  border-radius: 18px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 5px 5px 0 var(--ink-2);
+}
+
+.recipe-stats > div {
+  padding: 12px 10px;
+  text-align: center;
+}
+
+.recipe-stats > div + div {
+  border-left: 1.5px solid var(--ink);
+}
+
+.recipe-stats strong {
+  display: block;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  font-size: 1.1rem;
+  color: var(--foreground);
+}
+
+.recipe-stats span {
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+}
+
+/* Ingredients + instructions */
+.recipe-columns {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 14px;
+}
+
+.recipe-ingredients,
+.recipe-steps {
+  border: 1.5px solid var(--ink);
+  border-radius: 18px;
+  background: white;
+  padding: 12px;
+  overflow: auto;
+  max-height: 46vh;
+  box-shadow: 5px 5px 0 var(--ink-2);
+}
+
+.recipe-ingredients h3,
+.recipe-steps h3 {
+  margin: 0 0 10px;
+  font-family: "Instrument Serif", Georgia, serif;
+  color: var(--foreground);
+}
+
+.recipe-ingredients ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.recipe-ingredients li {
+  margin-bottom: 6px;
+  color: var(--secondary-foreground);
+  line-height: 1.55;
+  font-size: 0.9rem;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: start;
+}
+
+.step span {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1.5px solid var(--ink);
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 900;
+  background: color-mix(in oklab, white 80%, var(--coral));
+}
+
+.step p {
+  margin: 0;
+  color: var(--secondary-foreground);
+  line-height: 1.55;
+  font-size: 0.92rem;
+}
+
+/* ========= RESPONSIVE ========= */
+@media (max-width: 900px) {
+  .atelier-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 300px));
+  }
+
+  .recipe-detail-header {
+    grid-template-columns: 1fr;
+  }
+
+  .recipe-detail-media {
+    height: 260px;
+  }
+
+  .recipe-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recipe-stats > div:nth-child(3) {
+    border-left: 0;
+    border-top: 1.5px solid var(--ink);
+  }
+
+  .recipe-stats > div:nth-child(4) {
+    border-top: 1.5px solid var(--ink);
+  }
+
+  .recipe-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .recipe-ingredients,
+  .recipe-steps {
+    max-height: none;
+  }
+
+  .atelier-card-actions {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+}
+/* Top-right actions inside modal */
+.atelier-modal-topbar {
+  position: sticky;
+  top: 5px;
+  z-index: 60;
+
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+
+  padding: 8px 10px;
+}
+
+/* Save button styled like your design system */
+.atelier-modal-save {
+  border: 2px solid var(--foreground);
+  background: var(--gradient-coral);
+  color: white;
+
+  padding: 10px 14px;
+  border-radius: 999px;
+
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+
+  cursor: pointer;
+  box-shadow: 0 6px 0 color-mix(in oklab, var(--ink) 18%, transparent);
+  transition: transform 0.25s var(--ease-bounce), box-shadow 0.25s var(--ease-out);
+}
+
+.atelier-modal-save:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 0 color-mix(in oklab, var(--ink) 20%, transparent);
+}
+
+.atelier-modal-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: grayscale(0.2);
+}
+.atelier-modal-close {
+  /* remove: position: sticky; top: 5px; z-index: 50; margin-left: auto; */
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 2px solid var(--foreground);
+  background: white;
+  color: var(--foreground);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+}
