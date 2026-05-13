@@ -1,12 +1,13 @@
 from pathlib import Path
 import os
+import logging
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 
-# ✅ Only load local .env when running locally (not on Render)
+# ✅ Only load local backend/.env when running locally
+# On Render, use Render Environment settings instead.
 if os.getenv("RENDER") != "true":
     env_path = Path(__file__).resolve().parents[1] / ".env"
     if env_path.exists():
