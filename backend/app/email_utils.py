@@ -5,7 +5,7 @@ from email.message import EmailMessage
 
 logger = logging.getLogger("uvicorn.error")
 
-REQUIRED_EMAIL_VARS = [
+REQUIRED = [
     "GMAIL_FROM",
     "GMAIL_SMTP_SERVER",
     "GMAIL_SMTP_PORT",
@@ -13,15 +13,11 @@ REQUIRED_EMAIL_VARS = [
     "GMAIL_SMTP_PASSWORD",
 ]
 
-def _missing_email_vars():
-    return [k for k in REQUIRED_EMAIL_VARS if not os.getenv(k)]
-
 async def send_email(to_email: str, subject: str, body: str):
-    missing = _missing_email_vars()
+    missing = [k for k in REQUIRED if not os.getenv(k)]
     if missing:
-        msg = f"Email config missing env vars: {', '.join(missing)}"
-        logger.error(f"❌ {msg}")
-        raise RuntimeError(msg)
+        # ✅ IMPORTANT: raise so /forgot-password returns 500 instead of fake 200
+        raise RuntimeError(f"Missing email env vars: {', '.join(missing)}")
 
     message = EmailMessage()
     message["From"] = os.getenv("GMAIL_FROM")
@@ -33,12 +29,12 @@ async def send_email(to_email: str, subject: str, body: str):
         await aiosmtplib.send(
             message,
             hostname=os.getenv("GMAIL_SMTP_SERVER"),
-            port=int(os.getenv("GMAIL_SMTP_PORT", "587")),
+            port=int(os.getenv("GMAIL_SMTP_PORT")),
             username=os.getenv("GMAIL_SMTP_USERNAME"),
             password=os.getenv("GMAIL_SMTP_PASSWORD"),
             start_tls=True,
         )
         logger.info(f"✅ Email sent to {to_email}")
     except Exception as e:
-        logger.exception(f"❌ Email sending failed to {to_email}: {e}")
+        logger.exception(f"❌ Email sending failed: {e}")
         raise
