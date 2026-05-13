@@ -60,9 +60,9 @@ async def register(
     new_user = await crud.create_user(
         db,
         email=user.email,
-        password=user.password,
+        password=hash_password(user.password),  # ✅ FIXED HERE
         name=user.name,
-        verification_token=None,              # not needed for OTP
+        verification_token=None,
         verification_code=code,
         verification_code_expiry=expires_at
     )
@@ -154,11 +154,10 @@ async def forgot_password(
 ):
     user = await crud.get_user_by_email(db, email)
 
+    # 🔐 Always return same response (security best practice)
     if not user:
-        # keep same behavior to not leak whether the email exists
-        return {"message": "If email exists, reset code sent"}
+        return {"message": "If email exists, reset token sent"}
 
-    # generate 6-digit OTP
     token = generate_otp_code(6)
 
     user.reset_token = token
@@ -174,18 +173,14 @@ async def forgot_password(
         f"If you did not request this, ignore this email."
     )
 
-    # ✅ send synchronously so failures are visible (no silent success)
-    try:
-        await send_email(
-            email,
-            "Password Reset Token",
-            body
-        )
-    except Exception:
-        logger.exception("❌ Forgot-password email failed")
-        raise HTTPException(status_code=500, detail="Email could not be sent. Check SMTP settings.")
+    background_tasks.add_task(
+        send_email,
+        email,
+        "Password Reset Token",
+        body
+    )
 
-    return {"message": "Reset token sent"}
+    return {"message": "If email exists, reset token sent"}
 @router.post("/reset-password")
 async def reset_password(
     payload: schemas.ResetPasswordRequest,
