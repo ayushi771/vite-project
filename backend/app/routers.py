@@ -12,7 +12,8 @@ from .database import get_db
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-
+from sqlalchemy import select
+from . import models
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/api")
@@ -22,7 +23,12 @@ SPOONACULAR_BASE = "https://api.spoonacular.com/recipes/complexSearch"
 
 
 # ---------------- INGREDIENTS ----------------
+from sqlalchemy import select
 
+@router.get("/debug/raw-saved")
+async def debug(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(models.SavedRecipe))
+    return result.scalars().all()
 @router.post("/ingredients", response_model=schemas.IngredientOut)
 async def add_ingredient(ingredient: schemas.IngredientCreate, db: AsyncSession = Depends(get_db)):
     ingredient.name = ingredient.name.strip().lower()
