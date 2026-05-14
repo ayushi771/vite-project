@@ -193,3 +193,24 @@ export async function autocompleteIngredients(query) {
   const res = await fetch(`${BASE_URL}/spoonacular/autocomplete?query=${encodeURIComponent(query)}`);
   return handleResponse(res);
 }
+export const API_BASE =
+  import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+export async function apiFetch(url, options = {}) {
+  const token = localStorage.getItem("token");
+
+  const res = await fetch(`${API_BASE}${url}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
+  return res.json();
+}
