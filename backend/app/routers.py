@@ -9,10 +9,8 @@ from datetime import datetime, timezone
 from .auth import verify_password, hash_password, generate_otp_code, otp_expiry
 from . import crud, schemas
 from .database import get_db
-from .email_utils import send_email
 
 logger = logging.getLogger("uvicorn.error")
-
 router = APIRouter(prefix="/api")
 
 SPOONACULAR_API_KEY = os.getenv("SPOONACULAR_API_KEY")
@@ -22,39 +20,25 @@ SPOONACULAR_BASE = "https://api.spoonacular.com/recipes/complexSearch"
 # ---------------- INGREDIENTS ----------------
 
 @router.post("/ingredients", response_model=schemas.IngredientOut)
-async def add_ingredient(
-    ingredient: schemas.IngredientCreate,
-    db: AsyncSession = Depends(get_db),
-):
+async def add_ingredient(ingredient: schemas.IngredientCreate, db: AsyncSession = Depends(get_db)):
     ingredient.name = ingredient.name.strip().lower()
     return await crud.create_ingredient(db, ingredient)
 
 
 @router.get("/ingredients", response_model=List[schemas.IngredientOut])
-async def get_ingredients(
-    limit: int = Query(100, ge=1, le=1000),
-    db: AsyncSession = Depends(get_db),
-):
+async def get_ingredients(limit: int = Query(100, ge=1, le=1000), db: AsyncSession = Depends(get_db)):
     return await crud.list_ingredients(db, limit=limit)
 
 
 # ---------------- RECIPES ----------------
 
 @router.get("/recipes", response_model=List[schemas.RecipeOut])
-async def list_recipes(
-    limit: int = 50,
-    offset: int = 0,
-    db: AsyncSession = Depends(get_db),
-):
+async def list_recipes(limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db)):
     return await crud.list_recipes(db, limit=limit, offset=offset)
 
 
 @router.post("/save_recipe", response_model=schemas.SavedRecipeOut)
-async def save_recipe(
-    payload: schemas.RecipeSave,
-    db: AsyncSession = Depends(get_db),
-):
-    # ✅ prevent FK crashes / bad frontend state
+async def save_recipe(payload: schemas.RecipeSave, db: AsyncSession = Depends(get_db)):
     if payload.user_id <= 0:
         raise HTTPException(status_code=400, detail="Invalid user_id")
     if payload.recipe_id <= 0:
@@ -70,138 +54,41 @@ async def save_recipe(
     return obj
 
 
-# ---------------- AUTH ----------------
+# ---------------- AUTH (NO EMAIL VERIFICATION) ----------------
 
 @router.post("/register")
-async def register(
-    user: schemas.UserCreate,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Register user + send OTP verification code email.
-    Password is hashed inside crud.create_user (do NOT hash here).
-    """
+async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
     existing = await crud.get_user_by_email(db, user.email)
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    code = generate_otp_code(6)
-    expires_at = otp_expiry(10)
-
+    # Create user (password hashing should happen in crud OR here, but not both)
     new_user = await crud.create_user(
         db,
         email=user.email,
-        password=user.password,  # ✅ pass plain password
+        password=user.password,  # pass plain if crud hashes (your crud hashes)
         name=user.name,
         verification_token=None,
-        verification_code=code,
-        verification_code_expiry=expires_at,
+        verification_code=None,
+        verification_code_expiry=None,
     )
 
-    body = (
-        f"Hi {new_user.name},\n\n"
-        f"Your verification code is: {code}\n"
-        f"This code expires in 10 minutes.\n\n"
-        f"If you did not request this, ignore this email."
-    )
-
-    try:
-        await send_email(user.email, "Verify your account", body)
-    except Exception:
-        logger.exception("❌ Verification email failed")
-        raise HTTPException(
-            status_code=500,
-            detail="Verification email could not be sent. Check email provider settings.",
-        )
-
-    return {"message": "User registered. Check your email for the verification code."}
-
-
-@router.post("/resend-verification-code")
-async def resend_verification_code(
-    email: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Resend (generate new) verification OTP.
-    This fixes the common situation where user exists but is not verified (login gives 403).
-    """
-    user = await crud.get_user_by_email(db, email)
-
-    # security: don't reveal whether email exists
-    if not user:
-        return {"message": "If email exists, verification code sent"}
-
-    if user.is_verified:
-        return {"message": "Already verified"}
-
-    code = generate_otp_code(6)
-    user.verification_code = code
-    user.verification_code_expiry = otp_expiry(10)
-    await db.commit()
-
-    body = (
-        f"Hi {user.name},\n\n"
-        f"Your verification code is: {code}\n"
-        f"This code expires in 10 minutes.\n\n"
-        f"If you did not request this, ignore this email."
-    )
-
-    try:
-        await send_email(email, "Verify your account", body)
-    except Exception:
-        logger.exception("❌ Resend verification email failed")
-        raise HTTPException(status_code=500, detail="Verification email could not be sent.")
-
-    return {"message": "Verification code sent"}
-
-
-@router.post("/verify-code")
-async def verify_code(
-    payload: schemas.VerifyCode,
-    db: AsyncSession = Depends(get_db),
-):
-    user = await crud.get_user_by_email_and_code(db, payload.email, payload.code)
-
-    if not user:
-        raise HTTPException(status_code=400, detail="Invalid email or code")
-
-    if user.is_verified:
-        return {"message": "Already verified"}
-
-    now = datetime.now(timezone.utc)
-    expiry = user.verification_code_expiry
-
-    # ✅ timezone safety (handles naive datetimes from DB)
-    if expiry and expiry.tzinfo is None:
-        expiry = expiry.replace(tzinfo=timezone.utc)
-
-    if not expiry or expiry < now:
-        raise HTTPException(status_code=400, detail="Code expired")
-
-    user.is_verified = True
-    user.verification_code = None
-    user.verification_code_expiry = None
-    await db.commit()
-
-    return {"message": "Email verified successfully"}
+    return {
+        "message": "User registered successfully",
+        "user_id": new_user.id,
+        "name": new_user.name,
+        "email": new_user.email,
+    }
 
 
 @router.post("/login")
-async def login(
-    user: schemas.UserLogin,
-    db: AsyncSession = Depends(get_db),
-):
+async def login(user: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
     db_user = await crud.get_user_by_email(db, user.email)
-
     if not db_user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not verify_password(user.password, db_user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    if not db_user.is_verified:
-        raise HTTPException(status_code=403, detail="Please verify your email")
 
     return {
         "message": "Login successful",
@@ -211,62 +98,34 @@ async def login(
     }
 
 
-# ---------------- PASSWORD RESET ----------------
+# ---------------- PASSWORD RESET (DEV-SIMPLE: returns token) ----------------
 
 @router.post("/forgot-password")
-async def forgot_password(
-    email: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Sends OTP reset token to email.
-    Always returns a generic message to avoid leaking whether email exists.
-    """
+async def forgot_password(email: str, db: AsyncSession = Depends(get_db)):
     user = await crud.get_user_by_email(db, email)
 
-    # 🔐 don't reveal whether user exists
+    # security best practice would be same response always
     if not user:
-        return {"message": "If email exists, reset token sent"}
+        return {"message": "If email exists, reset token generated"}
 
     token = generate_otp_code(6)
     user.reset_token = token
     user.reset_token_expiry = otp_expiry(10)
     await db.commit()
 
-    body = (
-        f"Hi {user.name},\n\n"
-        f"Your password reset token is:\n\n"
-        f"{token}\n\n"
-        f"This expires in 10 minutes.\n\n"
-        f"If you did not request this, ignore this email."
-    )
-
-    try:
-        await send_email(email, "Password Reset Token", body)
-    except Exception:
-        logger.exception("❌ Forgot-password email failed")
-        raise HTTPException(
-            status_code=500,
-            detail="Email could not be sent. Check email provider settings.",
-        )
-
-    return {"message": "Reset token sent"}
+    # DEV ONLY: returning token (do not do this for real production)
+    return {"message": "Reset token generated", "reset_token": token}
 
 
 @router.post("/reset-password")
-async def reset_password(
-    payload: schemas.ResetPasswordRequest,
-    db: AsyncSession = Depends(get_db),
-):
+async def reset_password(payload: schemas.ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
     user = await crud.get_user_by_reset_token(db, payload.token)
-
     if not user:
         raise HTTPException(status_code=400, detail="Invalid reset token")
 
     now = datetime.now(timezone.utc)
     expiry = user.reset_token_expiry
 
-    # ✅ timezone safety
     if expiry and expiry.tzinfo is None:
         expiry = expiry.replace(tzinfo=timezone.utc)
 
@@ -282,77 +141,33 @@ async def reset_password(
 
 
 # ---------------- SAVED RECIPES MANAGEMENT ----------------
-@router.post("/resend-verification-code")
-async def resend_verification_code(email: str, db: AsyncSession = Depends(get_db)):
-    user = await crud.get_user_by_email(db, email)
 
-    # security: don't reveal whether email exists
-    if not user:
-        return {"message": "If email exists, verification code sent"}
-
-    if user.is_verified:
-        return {"message": "Already verified"}
-
-    code = generate_otp_code(6)
-    user.verification_code = code
-    user.verification_code_expiry = otp_expiry(10)
-    await db.commit()
-
-    body = (
-        f"Hi {user.name},\n\n"
-        f"Your verification code is: {code}\n"
-        f"This code expires in 10 minutes.\n\n"
-        f"If you did not request this, ignore this email."
-    )
-
-    try:
-        await send_email(email, "Verify your account", body)
-    except Exception:
-        logger.exception("❌ Resend verification email failed")
-        raise HTTPException(status_code=500, detail="Verification email could not be sent.")
-
-    return {"message": "Verification code sent"}
 @router.get("/saved-recipes")
-async def saved_recipes(
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-):
+async def saved_recipes(user_id: int, db: AsyncSession = Depends(get_db)):
     if user_id <= 0:
         raise HTTPException(status_code=400, detail="Invalid user_id")
     return await crud.get_saved_recipes(db, user_id)
 
 
 @router.get("/trash")
-async def trash_recipes(
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-):
+async def trash_recipes(user_id: int, db: AsyncSession = Depends(get_db)):
     if user_id <= 0:
         raise HTTPException(status_code=400, detail="Invalid user_id")
     return await crud.get_deleted_recipes(db, user_id)
 
 
 @router.put("/delete-recipe/{recipe_id}")
-async def delete_recipe(
-    recipe_id: int,
-    db: AsyncSession = Depends(get_db),
-):
+async def delete_recipe(recipe_id: int, db: AsyncSession = Depends(get_db)):
     return await crud.delete_saved_recipe(db, recipe_id)
 
 
 @router.put("/restore-recipe/{recipe_id}")
-async def restore_recipe(
-    recipe_id: int,
-    db: AsyncSession = Depends(get_db),
-):
+async def restore_recipe(recipe_id: int, db: AsyncSession = Depends(get_db)):
     return await crud.restore_recipe(db, recipe_id)
 
 
 @router.delete("/delete-permanently/{recipe_id}")
-async def delete_permanently(
-    recipe_id: int,
-    db: AsyncSession = Depends(get_db),
-):
+async def delete_permanently(recipe_id: int, db: AsyncSession = Depends(get_db)):
     return await crud.permanently_delete_recipe(db, recipe_id)
 
 
@@ -370,11 +185,7 @@ async def search_recipes(
     if not SPOONACULAR_API_KEY:
         raise HTTPException(status_code=503, detail="API key missing")
 
-    params = {
-        "apiKey": SPOONACULAR_API_KEY,
-        "number": number,
-    }
-
+    params = {"apiKey": SPOONACULAR_API_KEY, "number": number}
     if ingredients:
         params["includeIngredients"] = ingredients
     if cuisine:

@@ -93,7 +93,7 @@ async def create_user(
         verification_token=verification_token,
         verification_code=verification_code,
         verification_code_expiry=verification_code_expiry,
-        is_verified=False,
+        is_verified=True,
     )
     db.add(user)
     await db.commit()
