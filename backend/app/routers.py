@@ -40,6 +40,15 @@ async def get_ingredients(
 
 # ---------------- RECIPES ----------------
 
+@router.get("/recipes", response_model=List[schemas.RecipeOut])
+async def list_recipes(
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+):
+    return await crud.list_recipes(db, limit=limit, offset=offset)
+
+
 @router.post("/save_recipe", response_model=schemas.SavedRecipeOut)
 async def save_recipe(
     payload: schemas.RecipeSave,
@@ -61,15 +70,6 @@ async def save_recipe(
     return obj
 
 
-@router.get("/recipes", response_model=List[schemas.RecipeOut])
-async def list_recipes(
-    limit: int = 50,
-    offset: int = 0,
-    db: AsyncSession = Depends(get_db),
-):
-    return await crud.list_recipes(db, limit=limit, offset=offset)
-
-
 # ---------------- AUTH ----------------
 
 @router.post("/register")
@@ -79,8 +79,7 @@ async def register(
 ):
     """
     Register user + send OTP verification code email.
-    - Password is hashed inside crud.create_user (do NOT hash here).
-    - Email is sent synchronously so failures are visible on Render.
+    Password is hashed inside crud.create_user (do NOT hash here).
     """
     existing = await crud.get_user_by_email(db, user.email)
     if existing:
@@ -112,10 +111,49 @@ async def register(
         logger.exception("❌ Verification email failed")
         raise HTTPException(
             status_code=500,
-            detail="Verification email could not be sent. Check SMTP settings.",
+            detail="Verification email could not be sent. Check email provider settings.",
         )
 
     return {"message": "User registered. Check your email for the verification code."}
+
+
+@router.post("/resend-verification-code")
+async def resend_verification_code(
+    email: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Resend (generate new) verification OTP.
+    This fixes the common situation where user exists but is not verified (login gives 403).
+    """
+    user = await crud.get_user_by_email(db, email)
+
+    # security: don't reveal whether email exists
+    if not user:
+        return {"message": "If email exists, verification code sent"}
+
+    if user.is_verified:
+        return {"message": "Already verified"}
+
+    code = generate_otp_code(6)
+    user.verification_code = code
+    user.verification_code_expiry = otp_expiry(10)
+    await db.commit()
+
+    body = (
+        f"Hi {user.name},\n\n"
+        f"Your verification code is: {code}\n"
+        f"This code expires in 10 minutes.\n\n"
+        f"If you did not request this, ignore this email."
+    )
+
+    try:
+        await send_email(email, "Verify your account", body)
+    except Exception:
+        logger.exception("❌ Resend verification email failed")
+        raise HTTPException(status_code=500, detail="Verification email could not be sent.")
+
+    return {"message": "Verification code sent"}
 
 
 @router.post("/verify-code")
@@ -134,7 +172,7 @@ async def verify_code(
     now = datetime.now(timezone.utc)
     expiry = user.verification_code_expiry
 
-    # ✅ timezone safety
+    # ✅ timezone safety (handles naive datetimes from DB)
     if expiry and expiry.tzinfo is None:
         expiry = expiry.replace(tzinfo=timezone.utc)
 
@@ -144,8 +182,8 @@ async def verify_code(
     user.is_verified = True
     user.verification_code = None
     user.verification_code_expiry = None
-
     await db.commit()
+
     return {"message": "Email verified successfully"}
 
 
@@ -183,7 +221,6 @@ async def forgot_password(
     """
     Sends OTP reset token to email.
     Always returns a generic message to avoid leaking whether email exists.
-    Sends synchronously so SMTP errors are visible.
     """
     user = await crud.get_user_by_email(db, email)
 
@@ -210,7 +247,7 @@ async def forgot_password(
         logger.exception("❌ Forgot-password email failed")
         raise HTTPException(
             status_code=500,
-            detail="Email could not be sent. Check SMTP settings.",
+            detail="Email could not be sent. Check email provider settings.",
         )
 
     return {"message": "Reset token sent"}
@@ -239,8 +276,8 @@ async def reset_password(
     user.password = hash_password(payload.new_password)
     user.reset_token = None
     user.reset_token_expiry = None
-
     await db.commit()
+
     return {"message": "Password reset successful"}
 
 
