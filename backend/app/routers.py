@@ -9,12 +9,7 @@ from datetime import datetime, timezone
 from .auth import verify_password, hash_password, generate_otp_code, otp_expiry
 from . import crud, schemas
 from .database import get_db
-from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from sqlalchemy import select
-from . import models
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/api")
 
@@ -23,12 +18,7 @@ SPOONACULAR_BASE = "https://api.spoonacular.com/recipes/complexSearch"
 
 
 # ---------------- INGREDIENTS ----------------
-from sqlalchemy import select
 
-@router.get("/debug/raw-saved")
-async def debug(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(models.SavedRecipe))
-    return result.scalars().all()
 @router.post("/ingredients", response_model=schemas.IngredientOut)
 async def add_ingredient(ingredient: schemas.IngredientCreate, db: AsyncSession = Depends(get_db)):
     ingredient.name = ingredient.name.strip().lower()
@@ -91,39 +81,24 @@ async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db))
     }
 
 
-from jose import jwt
-from datetime import datetime, timedelta
-
-SECRET_KEY = "your-secret"
-ALGORITHM = "HS256"
-
-
 @router.post("/login")
 async def login(user: schemas.UserLogin, db: AsyncSession = Depends(get_db)):
     db_user = await crud.get_user_by_email(db, user.email)
-
     if not db_user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not verify_password(user.password, db_user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token_payload = {
-        "user_id": db_user.id,
-        "exp": datetime.utcnow() + timedelta(days=7),
-    }
-
-    token = jwt.encode(token_payload, SECRET_KEY, algorithm=ALGORITHM)
-
     return {
         "message": "Login successful",
-        "access_token": token,
-        "user": {
-            "id": db_user.id,
-            "name": db_user.name,
-            "email": db_user.email,
-        }
+        "user_id": db_user.id,
+        "name": db_user.name,
+        "email": db_user.email,
     }
+
+
+# ---------------- PASSWORD RESET (DEV-SIMPLE: returns token) ----------------
 
 @router.post("/forgot-password")
 async def forgot_password(email: str, db: AsyncSession = Depends(get_db)):
