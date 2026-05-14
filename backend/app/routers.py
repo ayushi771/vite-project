@@ -282,7 +282,36 @@ async def reset_password(
 
 
 # ---------------- SAVED RECIPES MANAGEMENT ----------------
+@router.post("/resend-verification-code")
+async def resend_verification_code(email: str, db: AsyncSession = Depends(get_db)):
+    user = await crud.get_user_by_email(db, email)
 
+    # security: don't reveal whether email exists
+    if not user:
+        return {"message": "If email exists, verification code sent"}
+
+    if user.is_verified:
+        return {"message": "Already verified"}
+
+    code = generate_otp_code(6)
+    user.verification_code = code
+    user.verification_code_expiry = otp_expiry(10)
+    await db.commit()
+
+    body = (
+        f"Hi {user.name},\n\n"
+        f"Your verification code is: {code}\n"
+        f"This code expires in 10 minutes.\n\n"
+        f"If you did not request this, ignore this email."
+    )
+
+    try:
+        await send_email(email, "Verify your account", body)
+    except Exception:
+        logger.exception("❌ Resend verification email failed")
+        raise HTTPException(status_code=500, detail="Verification email could not be sent.")
+
+    return {"message": "Verification code sent"}
 @router.get("/saved-recipes")
 async def saved_recipes(
     user_id: int,
