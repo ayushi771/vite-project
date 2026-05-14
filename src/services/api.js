@@ -8,7 +8,7 @@ const API_ORIGIN =
   "http://localhost:8000";
 
 const BASE_URL = `${API_ORIGIN}/api`;
-
+console.log("API URL:", BASE_URL);
 // ================================
 // UNIFIED RESPONSE HANDLER
 // ================================
