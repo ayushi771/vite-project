@@ -13,16 +13,22 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000"; // <- 
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem("user");
-    if (!stored) return;
+  const storedUser = localStorage.getItem("user");
+  const storedToken = localStorage.getItem("token");
+
+  if (storedUser && storedToken) {
     try {
-      setUser(JSON.parse(stored));
+      setUser(JSON.parse(storedUser));
+      setToken(storedToken);
     } catch {
       localStorage.removeItem("user");
+      localStorage.removeItem("token");
     }
-  }, []);
+  }
+}, []);
 
   function handleLogout() {
     setUser(null);
@@ -42,18 +48,18 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Main user={user} setUser={setUser} />} />
             <Route
-              path="/saved-recipes"
-              element={
-                <RequireAuth user={user}>
-                  <SavedRecipes user={user} />
-                </RequireAuth>
-              }
-            />
+  path="/saved-recipes"
+  element={
+    <RequireAuth user={user}>
+      <SavedRecipes user={user} token={token} />
+    </RequireAuth>
+  }
+/>
             <Route
               path="/trash"
               element={
                 <RequireAuth user={user}>
-                  <Trash user={user} />
+                  <Trash user={user} token={token} />
                 </RequireAuth>
               }
             />
@@ -127,19 +133,29 @@ export function Main({ user, setUser }) {
     };
   }, []);
 
-  function handleLogin(userData) {
-    setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
-    setShowAuth(false);
-    const from = location.state?.from?.pathname;
-    if (from) navigate(from, { replace: true });
-  }
+  function handleLogin(data) {
+  // backend should return: { user, access_token }
 
-  function handleLogout() {
-    setUser(null);
-    localStorage.removeItem("user");
-    navigate("/", { replace: true });
-  }
+  const userData = data.user;
+  const accessToken = data.access_token;
+
+  setUser(userData);
+  setToken(accessToken);
+
+  localStorage.setItem("user", JSON.stringify(userData));
+  localStorage.setItem("token", accessToken);
+
+  setShowAuth(false);
+}
+ function handleLogout() {
+  setUser(null);
+  setToken(null);
+
+  localStorage.removeItem("user");
+  localStorage.removeItem("token");
+
+  window.location.href = "/";
+}
 
   async function fetchSuggestionsRaw(query, signal) {
     if (!query) return [];

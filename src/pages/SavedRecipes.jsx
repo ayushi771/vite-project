@@ -1,26 +1,23 @@
 import { useEffect, useState } from "react";
-import {
-  getSavedRecipes,
-  deleteRecipe,
-  getRecipeDetails,
-} from "/src/services/api";
+import { apiFetch } from "/src/services/api";
 import "./SavedRecipes.css";
 import toast from "react-hot-toast";
 
-export default function SavedRecipes({ user, setUser }) {
+export default function SavedRecipes({ user, token }) {
   const [recipes, setRecipes] = useState([]);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
 
   // -----------------------
-  // LOAD SAVED RECIPES
+  // LOAD SAVED RECIPES (TOKEN-BASED)
   // -----------------------
   useEffect(() => {
-    if (!user) return;
+    if (!user || !token) return;
 
     async function loadRecipes() {
       try {
-        const data = await getSavedRecipes(user.id);
-        setRecipes(data || []);
+        const res = await apiFetch("/api/saved-recipes");
+        const data = await res.json();
+        setRecipes(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error(err);
         toast.error("Failed to load saved recipes");
@@ -28,13 +25,15 @@ export default function SavedRecipes({ user, setUser }) {
     }
 
     loadRecipes();
-  }, [user]);
+  }, [user, token]);
 
   // -----------------------
-  // DELETE
+  // DELETE RECIPE (TOKEN-BASED)
   // -----------------------
   async function handleDelete(id) {
-    const promise = deleteRecipe(id);
+    const promise = apiFetch(`/api/recipes/${id}`, {
+      method: "DELETE",
+    });
 
     toast.promise(promise, {
       loading: "Deleting recipe...",
@@ -51,7 +50,7 @@ export default function SavedRecipes({ user, setUser }) {
   }
 
   // -----------------------
-  // VIEW DETAILS (FIXED)
+  // VIEW DETAILS (TOKEN-BASED)
   // -----------------------
   async function handleView(recipeId) {
     if (!recipeId) {
@@ -60,7 +59,8 @@ export default function SavedRecipes({ user, setUser }) {
     }
 
     try {
-      const details = await getRecipeDetails(recipeId);
+      const res = await apiFetch(`/api/spoonacular/recipes/${recipeId}`);
+      const details = await res.json();
 
       const ingredientsList = (details.extendedIngredients || []).map(
         (i) =>
@@ -69,8 +69,10 @@ export default function SavedRecipes({ user, setUser }) {
       );
 
       let instructions = "";
-      if (details.instructions) instructions = details.instructions;
-      else if (details.analyzedInstructions?.length) {
+
+      if (details.instructions) {
+        instructions = details.instructions;
+      } else if (details.analyzedInstructions?.length) {
         instructions = details.analyzedInstructions[0].steps
           .map((step) => step.number + ". " + step.step)
           .join("\n");
@@ -78,7 +80,7 @@ export default function SavedRecipes({ user, setUser }) {
 
       const nutrients = details.nutrition?.nutrients || [];
       const caloriesObj = nutrients.find(
-        (n) => (n.name || n.title || "").toLowerCase() === "calories"
+        (n) => (n.name || "").toLowerCase() === "calories"
       );
 
       setSelectedRecipe({
@@ -103,7 +105,9 @@ export default function SavedRecipes({ user, setUser }) {
   function getRecipeImage(recipe) {
     return (
       recipe.recipe_image ||
-      `https://spoonacular.com/recipeImages/${recipe.recipe_id}-312x231.jpg`
+      (recipe.recipe_id
+        ? `https://spoonacular.com/recipeImages/${recipe.recipe_id}-312x231.jpg`
+        : "")
     );
   }
 
@@ -170,7 +174,7 @@ export default function SavedRecipes({ user, setUser }) {
       )}
 
       {/* -----------------------
-          MODAL (FIXED)
+          MODAL
       ----------------------- */}
       {selectedRecipe && (
         <div
@@ -189,7 +193,6 @@ export default function SavedRecipes({ user, setUser }) {
             </button>
 
             <div className="recipe-detail">
-              {/* HEADER */}
               <header className="recipe-detail-header">
                 <div className="recipe-detail-media">
                   <img
@@ -204,7 +207,6 @@ export default function SavedRecipes({ user, setUser }) {
                 </div>
               </header>
 
-              {/* BODY */}
               <section className="recipe-detail-body">
                 <div className="recipe-stats">
                   <div>
@@ -226,7 +228,6 @@ export default function SavedRecipes({ user, setUser }) {
                 </div>
 
                 <div className="recipe-columns">
-                  {/* INGREDIENTS */}
                   <section className="recipe-ingredients">
                     <h3>Ingredients</h3>
                     <ul>
@@ -236,7 +237,6 @@ export default function SavedRecipes({ user, setUser }) {
                     </ul>
                   </section>
 
-                  {/* INSTRUCTIONS */}
                   <section className="recipe-steps">
                     <h3>Instructions</h3>
 
