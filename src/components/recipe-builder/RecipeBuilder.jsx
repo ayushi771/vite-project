@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { searchRecipes, autocompleteIngredient } from "/src/services/spoonacularApi";
+import { searchRecipes, autocompleteIngredient } from "/src/services/api";
 import RBControls from "./RBControls";
 import RBResults from "./RBResults";
 import RecipeModal from "./RecipeModal";

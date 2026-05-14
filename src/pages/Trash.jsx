@@ -3,7 +3,7 @@ import {
   getTrashRecipes,
   restoreRecipe,
   deletePermanent,
-} from "/src/services/recipeApi";
+} from "/src/services/api";
 import Navbar from "/src/components/Navbar";
 import toast from "react-hot-toast";
 export default function Trash({ user }) {

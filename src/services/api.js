@@ -1,16 +1,16 @@
 // ================================
-// src/services/api.js (FINAL CLEAN)
+// src/services/api.js (UNIFIED PRODUCTION)
 // ================================
 
-// ✅ Always prefer env, fallback to deployed backend (NOT localhost)
+// Always prefer env, fallback to deployed backend (never localhost in prod)
 const API_ORIGIN =
-  import.meta.env.VITE_API_URL ||
-  "https://vite-project-1-gq4u.onrender.com";
+  import.meta.env.VITE_API_URL || // e.g. "https://vite-project-1-gq4u.onrender.com"
+  "http://localhost:8000";
 
 const BASE_URL = `${API_ORIGIN}/api`;
 
 // ================================
-// COMMON RESPONSE HANDLER
+// UNIFIED RESPONSE HANDLER
 // ================================
 async function handleResponse(res) {
   let json = null;
@@ -23,8 +23,10 @@ async function handleResponse(res) {
 
   if (!res.ok) {
     const message =
-      json?.detail || json?.message || json?.error || `Error ${res.status}`;
-
+      json?.detail ||
+      json?.message ||
+      json?.error ||
+      `Error ${res.status}`;
     const err = new Error(message);
     err.status = res.status;
     err.data = json;
@@ -35,31 +37,25 @@ async function handleResponse(res) {
 }
 
 // ================================
-// AUTH APIs
+// AUTH ENDPOINTS
 // ================================
 
-// ✅ REGISTER
 export async function registerUser(name, email, password) {
   const res = await fetch(`${BASE_URL}/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, email, password }),
   });
-
   return handleResponse(res);
 }
 
-// ✅ LOGIN
 export async function loginUser(email, password) {
   const res = await fetch(`${BASE_URL}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-
   const data = await handleResponse(res);
-
-  // ✅ store user automatically (IMPORTANT)
   if (data?.user_id) {
     localStorage.setItem(
       "user",
@@ -70,38 +66,29 @@ export async function loginUser(email, password) {
       })
     );
   }
-
   return data;
 }
 
-// ✅ FORGOT PASSWORD (returns reset token)
 export async function forgotPassword(email) {
   const res = await fetch(
     `${BASE_URL}/forgot-password?email=${encodeURIComponent(email)}`,
     { method: "POST" }
   );
-
   return handleResponse(res);
 }
 
-// ✅ RESET PASSWORD
 export async function resetPassword(token, newPassword) {
   const res = await fetch(`${BASE_URL}/reset-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      token,
-      new_password: newPassword,
-    }),
+    body: JSON.stringify({ token, new_password: newPassword }),
   });
-
   return handleResponse(res);
 }
 
 // ================================
 // USER HELPERS
 // ================================
-
 export function getCurrentUser() {
   try {
     return JSON.parse(localStorage.getItem("user"));
@@ -115,10 +102,8 @@ export function logoutUser() {
 }
 
 // ================================
-// RECIPES APIs
+// RECIPE MANAGEMENT
 // ================================
-
-// ✅ SAVE RECIPE
 export async function saveRecipe(userId, recipe) {
   const res = await fetch(`${BASE_URL}/save_recipe`, {
     method: "POST",
@@ -130,50 +115,81 @@ export async function saveRecipe(userId, recipe) {
       recipe_image: recipe?.image,
     }),
   });
-
   return handleResponse(res);
 }
 
-// ✅ GET SAVED RECIPES (FIXED)
 export async function getSavedRecipes(userId) {
   if (!userId) throw new Error("Missing user_id");
-
-  const res = await fetch(
-    `${BASE_URL}/saved-recipes?user_id=${userId}`
-  );
-
+  const res = await fetch(`${BASE_URL}/saved-recipes?user_id=${userId}`);
   return handleResponse(res);
 }
 
-// ✅ TRASH RECIPES
 export async function getTrashRecipes(userId) {
+  if (!userId) throw new Error("Missing user_id");
   const res = await fetch(`${BASE_URL}/trash?user_id=${userId}`);
   return handleResponse(res);
 }
 
-// ================================
-// SPOONACULAR APIs
-// ================================
-
-// ✅ SEARCH RECIPES
-export async function searchRecipes(params = {}) {
-  const query = new URLSearchParams(params).toString();
-
-  const res = await fetch(`${BASE_URL}/spoonacular/search?${query}`);
+export async function deleteRecipe(id) {
+  if (!id) throw new Error("Missing recipe id");
+  const res = await fetch(`${BASE_URL}/delete-recipe/${id}`, { method: "PUT" });
   return handleResponse(res);
 }
 
-// ✅ AUTOCOMPLETE
+export async function restoreRecipe(id) {
+  if (!id) throw new Error("Missing recipe id");
+  const res = await fetch(`${BASE_URL}/restore-recipe/${id}`, { method: "PUT" });
+  return handleResponse(res);
+}
+
+export async function deletePermanent(id) {
+  if (!id) throw new Error("Missing recipe id");
+  const res = await fetch(`${BASE_URL}/delete-permanently/${id}`, {
+    method: "DELETE",
+  });
+  return handleResponse(res);
+}
+
+// ================================
+// RECIPE DETAILS (with fallback)
+// ================================
+export async function getRecipeDetails(recipeId) {
+  if (!recipeId) throw new Error("Missing recipe_id");
+
+  // Try as local saved recipe (custom table logic, supports both)
+  let res = await fetch(`${BASE_URL}/recipes/${recipeId}`);
+  if (res.ok) return handleResponse(res);
+
+  // Fallback to Spoonacular proxy endpoint
+  res = await fetch(`${BASE_URL}/spoonacular/recipes/${recipeId}`);
+  if (res.ok) return handleResponse(res);
+
+  throw new Error("Failed to fetch recipe details");
+}
+
+// ================================
+// SPOONACULAR APIS
+// ================================
+
+export async function searchRecipes(filters = {}) {
+  const params = new URLSearchParams();
+  if (Array.isArray(filters.ingredients)) {
+    params.set("ingredients", filters.ingredients.join(","));
+  } else if (filters.ingredients) {
+    params.set("ingredients", filters.ingredients);
+  }
+  if (filters.cuisine) params.set("cuisine", filters.cuisine);
+  if (filters.diet) params.set("diet", filters.diet);
+  if (filters.meal_type) params.set("meal_type", filters.meal_type);
+  if (filters.max_calories) params.set("max_calories", String(filters.max_calories));
+  if (filters.number) params.set("number", String(filters.number));
+
+  const res = await fetch(`${BASE_URL}/spoonacular/search?${params.toString()}`);
+  return handleResponse(res);
+}
+
 export async function autocompleteIngredients(query) {
-  const res = await fetch(
-    `${BASE_URL}/spoonacular/autocomplete?query=${encodeURIComponent(query)}`
-  );
-
-  return handleResponse(res);
-}
-
-// ✅ GET RECIPE DETAILS
-export async function getRecipeDetails(id) {
-  const res = await fetch(`${BASE_URL}/spoonacular/recipes/${id}`);
+  if (!query) return [];
+  const res = await fetch(`${BASE_URL}/spoonacular/autocomplete?query=${encodeURIComponent(query)}`);
   return handleResponse(res);
 }
