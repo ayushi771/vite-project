@@ -120,6 +120,7 @@ export async function saveRecipe(userId, recipe) {
 
 export async function getSavedRecipes(userId) {
   if (!userId) throw new Error("Missing user_id");
+
   const res = await fetch(`${BASE_URL}/saved-recipes?user_id=${userId}`);
   return handleResponse(res);
 }
