@@ -8,7 +8,7 @@ const API_ORIGIN =
   "http://localhost:8000";
 
 const BASE_URL = `${API_ORIGIN}/api`;
-console.log("API URL:", BASE_URL);
+
 // ================================
 // UNIFIED RESPONSE HANDLER
 // ================================
@@ -126,10 +126,10 @@ export async function getSavedRecipes(userId) {
 
 export async function getTrashRecipes(userId) {
   if (!userId) throw new Error("Missing user_id");
+
   const res = await fetch(`${BASE_URL}/trash?user_id=${userId}`);
   return handleResponse(res);
 }
-
 export async function deleteRecipe(id) {
   if (!id) throw new Error("Missing recipe id");
   const res = await fetch(`${BASE_URL}/delete-recipe/${id}`, { method: "PUT" });
@@ -192,25 +192,4 @@ export async function autocompleteIngredients(query) {
   if (!query) return [];
   const res = await fetch(`${BASE_URL}/spoonacular/autocomplete?query=${encodeURIComponent(query)}`);
   return handleResponse(res);
-}
-export const API_BASE =
-  import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-export async function apiFetch(url, options = {}) {
-  const token = localStorage.getItem("token");
-
-  const res = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  return res.json();
 }
