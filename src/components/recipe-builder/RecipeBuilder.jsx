@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { searchRecipes, autocompleteIngredients } from "/src/services/api";
+import {
+  searchRecipes,
+  autocompleteIngredients,
+  getRecipeDetails,
+  saveRecipe
+} from "/src/services/api";
 import RBControls from "./RBControls";
 import RBResults from "./RBResults";
 import RecipeModal from "./RecipeModal";
@@ -24,7 +29,6 @@ export default function RecipeBuilder({ user, openLogin }) {
   const [authNotice, setAuthNotice] = useState("");
 
   const suggestionDebounce = useRef(null);
-  const API_PREFIX = "/api";
 
   const requireAuth = useCallback(
     (actionLabel) => {
@@ -146,11 +150,16 @@ export default function RecipeBuilder({ user, openLogin }) {
       setLoading(true);
 
       try {
-        const recipeId = r.id || r.spoonacular_id || r.spoonacularId;
-        const res = await fetch(`${API_PREFIX}/spoonacular/recipes/${recipeId}`);
+        const recipeId =
+          r.id ||
+          r.recipe_id ||
+          r.spoonacular_id ||
+          r.spoonacularId;
+        if (!recipeId) {
+        throw new Error("Recipe ID missing");
+      }
 
-        if (!res.ok) throw new Error(`Failed to load recipe (${res.status})`);
-        const details = await res.json();
+        const details = await getRecipeDetails(recipeId);
 
         const ingredientsList = (details.extendedIngredients || []).map((i) =>
           i.original || `${i.amount || ""} ${i.unit || ""} ${i.name || ""}`.trim()
@@ -165,7 +174,9 @@ export default function RecipeBuilder({ user, openLogin }) {
         }
 
         const nutrients = details.nutrition?.nutrients || [];
-        const caloriesObj = nutrients.find((n) => (n.name || n.title || "").toLowerCase() === "calories");
+        const caloriesObj = nutrients.find(
+          (n) => (n.name || n.title || "").toLowerCase() === "calories"
+        );
         const calories = caloriesObj ? caloriesObj.amount : null;
 
         setSelectedRecipe({
@@ -181,7 +192,8 @@ export default function RecipeBuilder({ user, openLogin }) {
           calories,
           servings: details.servings || null,
           nutrition: details.nutrition || null,
-          sourceUrl: details.sourceUrl || details.spoonacularSourceUrl || null,
+          sourceUrl:
+            details.sourceUrl || details.spoonacularSourceUrl || null,
         });
       } catch (err) {
         console.error("openRecipeDetails error", err);
@@ -189,9 +201,8 @@ export default function RecipeBuilder({ user, openLogin }) {
       } finally {
         setLoading(false);
       }
-    },
-    [API_PREFIX]
-  );
+    }, []);
+
 
   const surprise = useCallback(() => {
     if (!requireAuth("use Surprise recipe")) return;
@@ -203,59 +214,23 @@ export default function RecipeBuilder({ user, openLogin }) {
   // -----------------------
   // Save selected recipe (full handler)
   // -----------------------
-const handleSaveSelected = useCallback(async () => {
-  if (!selectedRecipe) return;
-  if (!requireAuth("save recipes")) return;
+  const handleSaveSelected = useCallback(async () => {
+    if (!selectedRecipe) return;
+    if (!requireAuth("save recipes")) return;
 
-  // Defensive checks
-  const uid = user?.id;
-  const rid = selectedRecipe?.spoonacular_id ?? selectedRecipe?.id;
-  if (!uid) {
-    console.error("No user id present", user);
-    alert("User id missing. Please login again.");
-    return;
-  }
-  if (!rid) {
-    console.error("No recipe id present", selectedRecipe);
-    alert("Recipe id missing.");
-    return;
-  }
-
-  try {
-    // <-- IMPORTANT: send exactly the fields backend requires
-    const payload = {
-      user_id: Number(uid),
-      recipe_id: Number(rid),
-      recipe_title: selectedRecipe.title || "",
-      recipe_image: selectedRecipe.image || ""
-    };
-
-    console.log("Saving recipe payload:", payload);
-
-    const res = await fetch(`${API_PREFIX}/save_recipe`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    // parse body safely
-    const json = await res.json().catch(() => null);
-    console.log("save_recipe status", res.status, "body:", json);
-
-    if (!res.ok) {
-      const errDetail = json?.detail ?? json ?? `Request failed (${res.status})`;
-      throw new Error(typeof errDetail === "string" ? errDetail : JSON.stringify(errDetail));
+    const uid = user?.id;
+    if (!uid) {
+      alert("User id missing. Please login again.");
+      return;
     }
-
-    // Success — broadcast so SavedRecipes can refresh if needed
-    window.dispatchEvent(new CustomEvent("recipeSaved", { detail: json }));
-
-    
-  } catch (err) {
-    console.error("save recipe error:", err);
-   
-  }
-}, [selectedRecipe, requireAuth, user]);
+    try {
+      await saveRecipe(uid, selectedRecipe);
+      window.dispatchEvent(new CustomEvent("recipeSaved"));
+    } catch (err) {
+      console.error("save recipe error:", err);
+      // If you want, show user-facing error here.
+    }
+  }, [selectedRecipe, requireAuth, user]);
 
   const primarySearchLabel = useMemo(() => {
     if (loading) return "Searching...";
