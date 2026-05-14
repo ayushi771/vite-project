@@ -19,27 +19,23 @@ const getFriendlyError = (err, mode) => {
 
   const msg = String(raw).toLowerCase();
 
+  // Login
   if (status === 401) return "Incorrect email or password.";
   if (msg.includes("invalid credentials")) return "Incorrect email or password.";
 
+  // Register conflicts
   if (msg.includes("already") && msg.includes("exist")) {
     return "An account with this email already exists. Please login instead.";
   }
 
-  if (mode === "forgot" && (status === 400 || status === 422)) {
-    return "Enter a valid email address.";
-  }
-
+  // Reset token problems
   if (mode === "reset" && (status === 400 || status === 422)) {
     return "Invalid or expired reset code. Please request a new reset code.";
   }
-  if (msg.includes("reset token expired")) {
-    return "Reset code expired. Please request a new reset code.";
-  }
-  if (msg.includes("invalid reset token")) {
-    return "Invalid reset code. Please check and try again.";
-  }
+  if (msg.includes("reset token expired")) return "Reset code expired. Please request a new reset code.";
+  if (msg.includes("invalid reset token")) return "Invalid reset code. Please check and try again.";
 
+  // Network-ish
   if (msg.includes("network") || msg.includes("timeout")) {
     return "Network error. Please try again.";
   }
@@ -147,15 +143,14 @@ export default function AuthModal({ show, onClose, onLoginSuccess }) {
 
       if (isRegister) {
         await registerUser(name.trim(), email.trim(), password);
-        toast.success("Account created. You can login now.");
 
+        toast.success("Account created. You can login now.");
         setMode("login");
         setPassword("");
         return;
       }
 
       if (isForgot) {
-        // reset password using token + new password
         await resetPassword(resetToken.trim(), password);
 
         toast.success("Password reset successful. You can login now.");
@@ -186,7 +181,7 @@ export default function AuthModal({ show, onClose, onLoginSuccess }) {
     try {
       const res = await forgotPassword(email.trim());
 
-      // Your backend returns { reset_token } (DEV MODE)
+      // DEV MODE: backend returns reset_token
       if (res?.reset_token) {
         setResetToken(String(res.reset_token));
         toast.success("Reset code generated (auto-filled).");
@@ -269,7 +264,40 @@ export default function AuthModal({ show, onClose, onLoginSuccess }) {
                 className="toggle-pass"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? "Hide" : "Show"}
+                {showPassword ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M3 12s4-7 9-7 9 7 9 7-4 7-9 7-9-7-9-7z"
+                      stroke="#374151"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M12 15a3 3 0 100-6 3 3 0 000 6z"
+                      stroke="#374151"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"
+                      stroke="#374151"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M3 3l18 18"
+                      stroke="#374151"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                )}
               </button>
             </div>
           )}
@@ -302,7 +330,40 @@ export default function AuthModal({ show, onClose, onLoginSuccess }) {
                   className="toggle-pass"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? "Hide" : "Show"}
+                  {showPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path
+                        d="M3 12s4-7 9-7 9 7 9 7-4 7-9 7-9-7-9-7z"
+                        stroke="#374151"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M12 15a3 3 0 100-6 3 3 0 000 6z"
+                        stroke="#374151"
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path
+                        d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"
+                        stroke="#374151"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M3 3l18 18"
+                        stroke="#374151"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  )}
                 </button>
               </div>
             </>
@@ -311,13 +372,7 @@ export default function AuthModal({ show, onClose, onLoginSuccess }) {
           {error && <p className="error">{error}</p>}
 
           <button className="auth-btn" disabled={loading} type="submit">
-            {loading
-              ? "Please wait..."
-              : isLogin
-              ? "Login"
-              : isRegister
-              ? "Register"
-              : "Reset Password"}
+            {loading ? "Please wait..." : isLogin ? "Login" : isRegister ? "Register" : "Reset Password"}
           </button>
         </form>
 

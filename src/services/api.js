@@ -1,17 +1,17 @@
 // ================================
-// src/services/api.js
+// src/services/api.js (FINAL CLEAN)
 // ================================
 
-// ✅ Use Render/Vercel env var in production, fallback to localhost for dev
-const API_ORIGIN = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// ✅ Always prefer env, fallback to deployed backend (NOT localhost)
+const API_ORIGIN =
+  import.meta.env.VITE_API_URL ||
+  "https://vite-project-1-gq4u.onrender.com";
+
 const BASE_URL = `${API_ORIGIN}/api`;
 
-/**
- * ✅ Common response handler (FETCH-safe)
- * - Works for JSON + empty responses
- * - Throws an Error with extra fields: err.status, err.data
- * - Prevents weird runtime issues and makes UI error mapping easy
- */
+// ================================
+// COMMON RESPONSE HANDLER
+// ================================
 async function handleResponse(res) {
   let json = null;
 
@@ -23,10 +23,9 @@ async function handleResponse(res) {
 
   if (!res.ok) {
     const message =
-      (json && (json.detail || json.message || json.error)) ||
-      `Request failed (${res.status})`;
+      json?.detail || json?.message || json?.error || `Error ${res.status}`;
 
-    const err = new Error(String(message));
+    const err = new Error(message);
     err.status = res.status;
     err.data = json;
     throw err;
@@ -35,7 +34,11 @@ async function handleResponse(res) {
   return json ?? {};
 }
 
-// ✅ REGISTER USER
+// ================================
+// AUTH APIs
+// ================================
+
+// ✅ REGISTER
 export async function registerUser(name, email, password) {
   const res = await fetch(`${BASE_URL}/register`, {
     method: "POST",
@@ -46,7 +49,7 @@ export async function registerUser(name, email, password) {
   return handleResponse(res);
 }
 
-// ✅ LOGIN USER
+// ✅ LOGIN
 export async function loginUser(email, password) {
   const res = await fetch(`${BASE_URL}/login`, {
     method: "POST",
@@ -54,21 +57,24 @@ export async function loginUser(email, password) {
     body: JSON.stringify({ email, password }),
   });
 
-  return handleResponse(res);
+  const data = await handleResponse(res);
+
+  // ✅ store user automatically (IMPORTANT)
+  if (data?.user_id) {
+    localStorage.setItem(
+      "user",
+      JSON.stringify({
+        id: data.user_id,
+        name: data.name,
+        email: data.email,
+      })
+    );
+  }
+
+  return data;
 }
 
-// ✅ VERIFY EMAIL CODE
-export async function verifyEmailCode(email, code) {
-  const res = await fetch(`${BASE_URL}/verify-code`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, code }),
-  });
-
-  return handleResponse(res);
-}
-
-// ✅ FORGOT PASSWORD
+// ✅ FORGOT PASSWORD (returns reset token)
 export async function forgotPassword(email) {
   const res = await fetch(
     `${BASE_URL}/forgot-password?email=${encodeURIComponent(email)}`,
@@ -92,11 +98,25 @@ export async function resetPassword(token, newPassword) {
   return handleResponse(res);
 }
 
-// ✅ OLD VERIFY LINK FLOW (optional)
-export async function verifyEmail(token) {
-  const res = await fetch(`${BASE_URL}/verify?token=${encodeURIComponent(token)}`);
-  return handleResponse(res);
+// ================================
+// USER HELPERS
+// ================================
+
+export function getCurrentUser() {
+  try {
+    return JSON.parse(localStorage.getItem("user"));
+  } catch {
+    return null;
+  }
 }
+
+export function logoutUser() {
+  localStorage.removeItem("user");
+}
+
+// ================================
+// RECIPES APIs
+// ================================
 
 // ✅ SAVE RECIPE
 export async function saveRecipe(userId, recipe) {
@@ -111,5 +131,49 @@ export async function saveRecipe(userId, recipe) {
     }),
   });
 
+  return handleResponse(res);
+}
+
+// ✅ GET SAVED RECIPES (FIXED)
+export async function getSavedRecipes(userId) {
+  if (!userId) throw new Error("Missing user_id");
+
+  const res = await fetch(
+    `${BASE_URL}/saved-recipes?user_id=${userId}`
+  );
+
+  return handleResponse(res);
+}
+
+// ✅ TRASH RECIPES
+export async function getTrashRecipes(userId) {
+  const res = await fetch(`${BASE_URL}/trash?user_id=${userId}`);
+  return handleResponse(res);
+}
+
+// ================================
+// SPOONACULAR APIs
+// ================================
+
+// ✅ SEARCH RECIPES
+export async function searchRecipes(params = {}) {
+  const query = new URLSearchParams(params).toString();
+
+  const res = await fetch(`${BASE_URL}/spoonacular/search?${query}`);
+  return handleResponse(res);
+}
+
+// ✅ AUTOCOMPLETE
+export async function autocompleteIngredients(query) {
+  const res = await fetch(
+    `${BASE_URL}/spoonacular/autocomplete?query=${encodeURIComponent(query)}`
+  );
+
+  return handleResponse(res);
+}
+
+// ✅ GET RECIPE DETAILS
+export async function getRecipeDetails(id) {
+  const res = await fetch(`${BASE_URL}/spoonacular/recipes/${id}`);
   return handleResponse(res);
 }
