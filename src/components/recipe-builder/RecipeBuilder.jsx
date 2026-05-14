@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { searchRecipes, autocompleteIngredient } from "/src/services/api";
+import { searchRecipes, autocompleteIngredients } from "/src/services/api";
 import RBControls from "./RBControls";
 import RBResults from "./RBResults";
 import RecipeModal from "./RecipeModal";
@@ -54,7 +54,7 @@ export default function RecipeBuilder({ user, openLogin }) {
 
     suggestionDebounce.current = setTimeout(async () => {
       try {
-        const data = await autocompleteIngredient(ingredientInput);
+        const data = await autocompleteIngredients(ingredientInput);
         setSuggestions(data || []);
       } catch (err) {
         console.error("Autocomplete failed", err);
