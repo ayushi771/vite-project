@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Navigate } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
+
 export default function UserMenu({ user, onLogout, openSaved, openTrash }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
-  const Navigate = useNavigate();
+  const navigate = useNavigate(); // <-- Lowercase, not shadowing component
+
   if (!user) return null;
 
   const toggleMenu = () => {
@@ -31,16 +32,14 @@ export default function UserMenu({ user, onLogout, openSaved, openTrash }) {
 
       {open && (
         <div className="dropdown">
-          {/* dropdown content top */}
-<div className="menu-user">
-  <div className="menu-user__name">{user?.name?.trim() || "User"}</div>
-  {user?.email && <div className="menu-user__email">{user.email}</div>}
-</div>
-
-<div className="menu-divider" />
+          <div className="menu-user">
+            <div className="menu-user__name">{user?.name?.trim() || "User"}</div>
+            {user?.email && <div className="menu-user__email">{user.email}</div>}
+          </div>
+          <div className="menu-divider" />
           <button
             onClick={() => {
-              Navigate("/saved-recipes");
+              navigate("/saved-recipes");
               setOpen(false);
             }}
           >
@@ -49,7 +48,7 @@ export default function UserMenu({ user, onLogout, openSaved, openTrash }) {
 
           <button
             onClick={() => {
-              Navigate("/trash");
+              navigate("/trash");
               setOpen(false);
             }}
           >

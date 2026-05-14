@@ -7,9 +7,9 @@ import SavedRecipes from "/src/pages/SavedRecipes";
 import RecipeBuilder from "/src/components/recipe-builder/RecipeBuilder";
 import RequireAuth from "/src/components/RequireAuth";
 import Trash from "/src/pages/Trash";
-
 import toast, { Toaster } from "react-hot-toast";
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000"; // <- FIXED
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -17,7 +17,6 @@ export default function App() {
   useEffect(() => {
     const stored = localStorage.getItem("user");
     if (!stored) return;
-
     try {
       setUser(JSON.parse(stored));
     } catch {
@@ -33,18 +32,15 @@ export default function App() {
   return (
     <BrowserRouter>
       <div className="app-shell">
- <Toaster position="top-center" />
-        {/* ✅ MOVE NAVBAR HERE */}
+        <Toaster position="top-center" />
         <Navbar
           user={user}
           onLoginClick={() => window.dispatchEvent(new Event("open-login"))}
           onLogout={handleLogout}
         />
-
         <div className="app-content">
           <Routes>
             <Route path="/" element={<Main user={user} setUser={setUser} />} />
-
             <Route
               path="/saved-recipes"
               element={
@@ -53,7 +49,6 @@ export default function App() {
                 </RequireAuth>
               }
             />
-
             <Route
               path="/trash"
               element={
@@ -68,7 +63,6 @@ export default function App() {
     </BrowserRouter>
   );
 }
-
 
 export function Main({ user, setUser }) {
   const navigate = useNavigate();
@@ -94,35 +88,26 @@ export function Main({ user, setUser }) {
     setSuggestions([]);
     setSelectedIndex(-1);
   }, []);
+
   useEffect(() => {
-  const params = new URLSearchParams(location.search);
-  const token = params.get("token");
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token");
+    if (!token) return;
 
-  if (!token) return;
+    fetch(`${API_BASE}/api/verify?token=${token}`)
+      .then((res) => res.json())
+      .then((data) => {
+        toast.success(data.message || "Email verified! Now login 🎉");
+        setShowAuth(true);
+        navigate("/", { replace: true });
+      })
+      .catch(() => {
+        toast.error("Invalid or expired verification link ❌");
+        setShowAuth(true);
+        navigate("/", { replace: true });
+      });
+  }, [location.search, navigate]);
 
-  // Call backend verify API
-  fetch(`${API_BASE}/api/verify?token=${token}`)
-    .then((res) => res.json())
-    .then((data) => {
-      toast.success(data.message || "Email verified! Now login 🎉");
-
-      // Open login modal automatically
-      setShowAuth(true);
-
-      // Clean URL (remove token from URL)
-      navigate("/", { replace: true });
-    })
-    .catch(() => {
-      toast.error("Invalid or expired verification link ❌");
-
-      // Still open login modal
-      setShowAuth(true);
-
-      navigate("/", { replace: true });
-    });
-
-}, [location.search]);
-  // hydrate top-level user into App state if localStorage exists but user prop is null
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser && !user) {
@@ -132,22 +117,20 @@ export function Main({ user, setUser }) {
         localStorage.removeItem("user");
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, setUser]);
+
+  useEffect(() => {
+    const openLogin = () => setShowAuth(true);
+    window.addEventListener("open-login", openLogin);
+    return () => {
+      window.removeEventListener("open-login", openLogin);
+    };
   }, []);
-   useEffect(() => {
-  const openLogin = () => setShowAuth(true);
 
-  window.addEventListener("open-login", openLogin);
-
-  return () => {
-    window.removeEventListener("open-login", openLogin);
-  };
-}, []);
-   function handleLogin(userData) {
+  function handleLogin(userData) {
     setUser(userData);
     localStorage.setItem("user", JSON.stringify(userData));
     setShowAuth(false);
-
     const from = location.state?.from?.pathname;
     if (from) navigate(from, { replace: true });
   }
@@ -161,13 +144,10 @@ export function Main({ user, setUser }) {
   async function fetchSuggestionsRaw(query, signal) {
     if (!query) return [];
     const q = query.trim().toLowerCase();
-
     if (suggestionsCache.current.has(q)) {
       return suggestionsCache.current.get(q);
     }
-
     const url = `${API_BASE}/api/spoonacular/autocomplete?query=${encodeURIComponent(q)}`;
-
     const res = await fetch(url, { signal });
     if (!res.ok) {
       throw new Error("Failed to fetch suggestions");
@@ -189,10 +169,8 @@ export function Main({ user, setUser }) {
       }
       return;
     }
-
     setSuggestionLoading(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
     debounceRef.current = setTimeout(async () => {
       try {
         if (activeRequestController.current) {
@@ -200,10 +178,8 @@ export function Main({ user, setUser }) {
         }
         const controller = new AbortController();
         activeRequestController.current = controller;
-
         const results = await fetchSuggestionsRaw(inputValue, controller.signal);
         if (controller.signal.aborted) return;
-
         setSuggestions(results);
         setSelectedIndex(results.length > 0 ? 0 : -1);
       } catch (err) {
@@ -215,7 +191,6 @@ export function Main({ user, setUser }) {
         activeRequestController.current = null;
       }
     }, 250);
-
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -225,18 +200,12 @@ export function Main({ user, setUser }) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       if (suggestions.length > 0) {
-        setSelectedIndex((idx) => {
-          const next = idx + 1 < suggestions.length ? idx + 1 : 0;
-          return next;
-        });
+        setSelectedIndex((idx) => (idx + 1 < suggestions.length ? idx + 1 : 0));
       }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       if (suggestions.length > 0) {
-        setSelectedIndex((idx) => {
-          const next = idx - 1 >= 0 ? idx - 1 : suggestions.length - 1;
-          return next;
-        });
+        setSelectedIndex((idx) => (idx - 1 >= 0 ? idx - 1 : suggestions.length - 1));
       }
     } else if (e.key === "Enter") {
       if (selectedIndex >= 0 && suggestions[selectedIndex]) {
@@ -291,7 +260,6 @@ export function Main({ user, setUser }) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const newIngredient = (formData.get("ingredient") || "").trim().toLowerCase();
-
     if (!newIngredient) {
       setError("Please enter an ingredient.");
     } else if (ingredients.includes(newIngredient)) {
@@ -303,7 +271,6 @@ export function Main({ user, setUser }) {
       setSuggestions([]);
       setSelectedIndex(-1);
       setError("");
-
       (async () => {
         try {
           await fetch(`${API_BASE}/api/ingredients`, {
@@ -320,13 +287,10 @@ export function Main({ user, setUser }) {
 
   async function fetchRecipeDetailsFromBackend(recipeId) {
     const detailsRes = await fetch(`${API_BASE}/api/spoonacular/recipes/${recipeId}`);
-
     if (!detailsRes.ok) {
       throw new Error("Failed to fetch recipe details from backend");
     }
-
     const detailsData = await detailsRes.json();
-
     const saveRes = await fetch(`${API_BASE}/api/recipes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -338,9 +302,7 @@ export function Main({ user, setUser }) {
         ingredients: Array.isArray(detailsData.ingredients) ? detailsData.ingredients : [],
       }),
     });
-
     const savedRecipe = await saveRes.json();
-
     setRecipe({
       id: savedRecipe.id,
       spoonacular_id: savedRecipe.spoonacular_id,
@@ -356,19 +318,15 @@ export function Main({ user, setUser }) {
       setError("Add at least 2 ingredients to get a recipe.");
       return;
     }
-
     setLoading(true);
     setError("");
-
     try {
       const q = ingredients.map((i) => encodeURIComponent(i)).join(",");
       const response = await fetch(`${API_BASE}/api/spoonacular/findByIngredients?ingredients=${q}&number=10`);
       if (!response.ok) {
         throw new Error("Failed to fetch recipes");
       }
-
       const data = await response.json();
-
       if (data.length === 0) {
         setRecipe({
           title: "No recipe found",
@@ -377,11 +335,9 @@ export function Main({ user, setUser }) {
         });
         return;
       }
-
       setRecipesPool(data);
       const randomIndex = Math.floor(Math.random() * data.length);
       setCurrentIndex(randomIndex);
-
       await fetchRecipeDetailsFromBackend(data[randomIndex].id || data[randomIndex].spoonacularId || data[randomIndex].spoonacular_id);
     } catch (err) {
       console.error(err);
@@ -397,18 +353,13 @@ export function Main({ user, setUser }) {
 
   async function regenerateRecipe() {
     if (recipesPool.length === 0) return;
-
     setLoading(true);
-
     try {
       let newIndex;
-
       do {
         newIndex = Math.floor(Math.random() * recipesPool.length);
       } while (newIndex === currentIndex && recipesPool.length > 1);
-
       setCurrentIndex(newIndex);
-
       await fetchRecipeDetailsFromBackend(recipesPool[newIndex].id || recipesPool[newIndex].spoonacularId || recipesPool[newIndex].spoonacular_id);
     } catch (err) {
       console.error(err);
@@ -426,10 +377,8 @@ export function Main({ user, setUser }) {
       : "";
 
   return (
-      <main>
-     
+    <main>
       <RecipeBuilder user={user} openLogin={() => setShowAuth(true)} />
-
       <AuthModal show={showAuth} onClose={() => setShowAuth(false)} onLoginSuccess={handleLogin} />
     </main>
   );
