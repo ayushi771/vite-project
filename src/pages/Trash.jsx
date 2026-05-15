@@ -108,13 +108,7 @@ export default function Trash({ user }) {
           </div>
         </section>
 
-        {recipes.length === 0 && (
-          <div className="atelier-empty" style={{ marginTop: 20 }}>
-            <div className="atelier-empty-icon">🗑️</div>
-            <h2>No recipes in Trash</h2>
-            <p>Deleted recipes will appear here.</p>
-          </div>
-        )}
+        
       </div>
     </div>
   );
