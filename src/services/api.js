@@ -102,13 +102,24 @@ export function logoutUser() {
 }
 
 export async function saveRecipe(userId, recipe) {
+  console.log("SAVING RECIPE RAW RECIPE OBJECT:", recipe);
+  const recipeId = recipe?.spoonacular_id ?? recipe?.id;
+  console.log("USING recipe_id:", recipeId);
+
+  if (!recipeId) {
+    alert("No recipe_id found in this recipe. Check console.");
+    throw new Error("Missing recipe_id");
+  }
+
   const payload = {
     user_id: Number(userId),
-    recipe_id: recipe.spoonacular_id || recipe.id,
-    recipe_title: recipe.title || "",
-    recipe_image: recipe.image || "",
+    recipe_id: Number(recipeId),
+    recipe_title: recipe?.title?.toString() || "",
+    recipe_image: recipe?.image?.toString() || "",
   };
-  console.log("Saving recipe. Payload:", payload);
+
+  console.log("FINAL API PAYLOAD FOR SAVE:", payload);
+
   const res = await fetch(`${BASE_URL}/save_recipe`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
