@@ -1,4 +1,5 @@
 from datetime import datetime
+from http.client import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -187,25 +188,17 @@ async def get_deleted_recipes(db: AsyncSession, user_id: int):
 
 # ---------------- DELETE / RESTORE (FIXED SECURITY) ----------------
 
-async def delete_saved_recipe(db: AsyncSession, recipe_id: int, user_id: int):
-    result = await db.execute(
-        select(models.SavedRecipe)
-        .where(models.SavedRecipe.id == recipe_id)
-        .where(models.SavedRecipe.user_id == user_id)
-    )
-
+async def delete_saved_recipe(db: AsyncSession, recipe_id: int):
+    result = await db.execute(select(models.SavedRecipe).where(models.SavedRecipe.id == recipe_id))
     recipe = result.scalar_one_or_none()
 
     if not recipe:
-        return {"error": "Recipe not found"}
-
+        raise HTTPException(status_code=404, detail="Recipe not found")
     recipe.is_deleted = True
     recipe.deleted_at = datetime.utcnow()
 
     await db.commit()
     return {"message": "Recipe moved to trash"}
-
-
 async def restore_recipe(db: AsyncSession, recipe_id: int):
     result = await db.execute(
         select(models.SavedRecipe).where(models.SavedRecipe.id == recipe_id)
