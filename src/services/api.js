@@ -101,19 +101,18 @@ export function logoutUser() {
   localStorage.removeItem("user");
 }
 
-// ================================
-// RECIPE MANAGEMENT
-// ================================
 export async function saveRecipe(userId, recipe) {
+  const payload = {
+    user_id: Number(userId),
+    recipe_id: recipe.spoonacular_id || recipe.id,
+    recipe_title: recipe.title || "",
+    recipe_image: recipe.image || "",
+  };
+  console.log("Saving recipe. Payload:", payload);
   const res = await fetch(`${BASE_URL}/save_recipe`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      user_id: userId,
-      recipe_id: recipe?.id,
-      recipe_title: recipe?.title,
-      recipe_image: recipe?.image,
-    }),
+    body: JSON.stringify(payload),
   });
   return handleResponse(res);
 }
