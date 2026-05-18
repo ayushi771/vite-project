@@ -79,7 +79,7 @@ SECRET_KEY=your_secret_key
 
 ## 📸 Screenshots
 
-<img width="1280" height="1200" alt="image" src="https://github.com/user-attachments/assets/87c96c59-823c-446a-85cb-6fff539a3c39" />
+<img width="1080" height="1100" alt="image" src="https://github.com/user-attachments/assets/87c96c59-823c-446a-85cb-6fff539a3c39" />
 
 
 ---
