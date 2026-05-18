@@ -564,12 +564,15 @@ export default function RBControls(props) {
             number of recipes
           </label>
           <input
-            type="number"
-            min="1"
-            max="50"
-            value={number || 8}
-            onChange={(e) => setNumber && setNumber(Number(e.target.value))}
-          />
+  type="number"
+  min="1"
+  max="50"
+  value={number ?? ""}
+  onChange={(e) => {
+    const val = e.target.value;
+    setNumber(val === "" ? "" : Number(val));
+  }}
+/>
         </div>
 
         <div className="actions-row">
