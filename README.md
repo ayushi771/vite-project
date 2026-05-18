@@ -1,12 +1,99 @@
-# React + Vite
+#  Recipe Finder App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern recipe finder web application built using React + Vite frontend and FastAPI backend.
 
-Currently, two official plugins are available:
+Live Demo:  
+https://vite-project-2-guer.onrender.com/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## ✨ Features
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- 🔍 Search recipes by ingredients
+- 🍽 Filter by cuisine, diet, and meal type
+- ❤️ Save favorite recipes
+- 🔐 Authentication system (Login/Register/Forgot Password)
+- 📱 Fully responsive UI
+- ⚡ Fast frontend built with Vite + React
+- 🐍 FastAPI backend with PostgreSQL
+- ☁️ Deployed on Render
+
+---
+
+## 🛠 Tech Stack
+
+### Frontend
+- React
+- Vite
+- Framer Motion
+- React Hot Toast
+
+### Backend
+- FastAPI
+- SQLAlchemy
+- PostgreSQL
+- AsyncPG
+
+---
+
+## 🚀 Deployment
+
+Frontend and backend deployed using Render.
+
+Frontend:
+https://vite-project-2-guer.onrender.com/
+
+---
+
+## ⚙️ Installation
+
+### Frontend
+
+```bash
+npm install
+npm run dev
+```
+
+### Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.app:app --reload
+```
+
+---
+
+## 🔑 Environment Variables
+
+Create a `.env` file inside backend folder.
+
+Example:
+
+```env
+DATABASE_URL=your_database_url
+SECRET_KEY=your_secret_key
+```
+
+---
+
+## 📸 Screenshots
+
+<img width="1280" height="1200" alt="image" src="https://github.com/user-attachments/assets/87c96c59-823c-446a-85cb-6fff539a3c39" />
+
+
+---
+
+## 📌 Future Improvements
+
+- AI recipe recommendations
+- Recipe image upload
+- Meal planning
+- Shopping list generation
+- Email verification
+
+---
+
+## 👩‍💻 Author
+
+Ayushi Somani
