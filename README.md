@@ -1,4 +1,4 @@
-#  Recipe Finder App
+#  Recipe Finder Website
 
 A modern recipe finder web application built using React + Vite frontend and FastAPI backend.
 
